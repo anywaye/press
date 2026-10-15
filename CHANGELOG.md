@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-10-15 (latest) — the gate, live on docs.cafaye.com/notes
+
+**`cmd/press-gate` is the private notes site's door, and it is deployed.**
+One endpoint answering traefik-side... no — answering nginx's `auth_request`
+subrequest: resolve the caller's bearer token through identity's
+`POST /v1/introspections`, admit only accounts on this tenant's allowlist,
+fail closed on an unreachable identity. The gate's failure modes are its
+whole subject: a valid token for the wrong org gets the same 401 as a forged
+one, so the door is not an account-existence oracle; an identity outage is a
+closed door, never an open one; an empty allowlist is a closed door, logged
+at startup.
+
+The deployment lives in cafaye/docs `deploy/docs.cafaye.com.yaml`. The
+middleware-with-traefik approach was tried first and failed silently — the
+notes home served to the open internet — which is why the subrequest lives
+in nginx's own config now.
+
+Six behavior tests drive the door: admit, refuse each wrong-caller shape,
+fail closed, closed on empty allowlist, multi-account.
+
+# Changelog
+
 ## 2026-10-15 (later) — the build worker
 
 **The worker turns a receipt into artifacts.** Claim a queued build, fetch the

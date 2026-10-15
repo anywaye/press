@@ -66,3 +66,13 @@ else; a request naming a tenant is refused; a project name that could escape
 its prefix is refused before anything is written; an over-cap tarball is
 refused mid-read; an unverified caller writes nothing; the receipt's digest
 and size are the exact bytes sent; the lifecycle refuses backward moves.
+
+## The gate (cmd/press-gate)
+
+The private notes site's door, deployed in front of docs.cafaye.com/notes by
+nginx's `auth_request` (manifest: cafaye/docs `deploy/docs.cafaye.com.yaml`).
+It resolves the caller through identity's introspection route and admits only
+`PRESS_NOTES_ACCOUNTS` — today the operator account that owns the notes;
+press's tenant model is where per-org gating arrives. Failures are closed: an
+unreachable identity, an empty allowlist, a token for another org — all 401,
+none distinguishable from a forged token.
