@@ -18,13 +18,18 @@ remember to apply.
 
 **Exists:** the ingest path (verify → cap → digest → R2 write → receipt
 record), the key layout, the receipt and build records, the lifecycle rule
-(queued → running → succeeded/failed, never backward).
+(queued → running → succeeded/failed, never backward), and the worker that
+drives a build end to end — fetch, extract into the engine's content tree,
+checkout the engine at a pinned ref, build, upload under the build's own
+prefix. Every failure lands the record on `failed` with its reason.
 
 **Does not exist yet, and this list is the work queue, not an omission:**
 
-- the build worker: an ephemeral sandbox that checks out `cafaye/docs` at a
-  pinned engine ref, syncs the tenant's content, runs the two builds, and
-  writes `tenants/<org>/dist/…` to R2;
+- the production orchestration: the loop that claims queued builds, a k3s
+  Job per build with the toolchains it needs, and the cron entry point;
+- the reconciliation run: ingest objects with no receipt row, and receipt rows
+  whose build never finished;
+- the goose runner (`internal/migrate`) and its gate job;
 - the reconciliation run: ingest objects with no receipt row, and receipt rows
   whose build never finished;
 - the goose runner (`internal/migrate`) and its gate job;

@@ -5,7 +5,7 @@ press files the tarball, records the ingest, and enqueues the build whose
 artifacts nginx serves.** BSL 1.1 (`Change License: Apache-2.0`, four years
 out): anyone can self-host it, only cafaye runs it as a service.
 
-**Status: the ingest half exists and is under test; the build sandbox is the
+**Status: ingest and build under test; the production orchestration is the
 next packet.** The tenant-isolation model, the key layout, the receipt table
 and the build lifecycle are complete; what is not in the tree is the worker
 that runs cafaye/docs's build in an ephemeral sandbox and writes `dist/` under
@@ -28,7 +28,7 @@ aim its upload at another tenant's prefix, and every table row carries
 | `internal/auth` | token verification against identity's JWKS; the only trust boundary |
 | `internal/store` | the S3 client press speaks, and the **key layout** — `tenants/<org>/ingest/…`, `tenants/<org>/dist/…` |
 | `internal/ingest` | the ingest path: verify, cap, digest, write, record; the HTTP handler |
-| `internal/builds` | the build lifecycle (queued → running → succeeded/failed) and its record |
+| `internal/builds` | the build lifecycle (queued → running → succeeded/failed) and the worker that drives it |
 | `internal/platform/db` | the pool to the press database on the one Postgres cluster |
 | `migrations/` | goose SQL: `ingest_receipts`, `builds` |
 

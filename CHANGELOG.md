@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-10-15 (later) — the build worker
+
+**The worker turns a receipt into artifacts.** Claim a queued build, fetch the
+tarball, extract it into the engine's content tree (`docs/` for the public
+kind, `notes/` for the private one), check out the docs engine at a pinned
+ref, build, upload under the build's own prefix, transition the record. Every
+step is a collaborator behind an interface, and every failure — runner,
+store, upload — lands the record on `failed` with the reason. A build stuck
+in `running` is a build whose tenant silently never gets artifacts, so no
+code path leaves it there.
+
+**The upload target is the build record's prefix and nothing else** —
+computed at creation from the build's tenant and kind. The one cross-tenant
+shape the worker can be handed (a receipt from another tenant in the call) is
+refused before the tarball is even fetched: no fetch, no build, no upload.
+
+**The tarball is untrusted input.** A member with a `..` element is refused,
+not rewritten — the tempting defense of `Clean`-ing the path silently
+renames the archive's content, and an archive whose meaning changed under
+extraction is worse than one that failed loudly.
+
+**The worker pins the engine ref it built against**, so a behavior change in
+the engine is diagnosable per build rather than a fleet-wide surprise.
+
+The cafaye/docs engine gained the matching half in the same window:
+`bin/sync-content --source <dir>` builds one tenant's content into the two
+trees with no fleet beside it — the tenant build is the same build with one
+tenant's content, not a weaker one.
+
+# Changelog
+
 ## 2026-10-15 — the ingest half of press
 
 **The tenant-isolation model, complete.** press ingests a documentation
