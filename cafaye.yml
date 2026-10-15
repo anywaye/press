@@ -1,0 +1,38 @@
+# cafaye.yml — the cafaye project manifest for press.
+#
+# The schema is owned by cafaye/core, not by this repository (see identity's
+# manifest for the full history of the shape and why the guessed fields are
+# gone). What matters here is what press is to the fleet:
+#
+#   press is the documentation service. It receives content tarballs from
+#   `cafe docs publish`, verifies the caller against identity, records the
+#   ingest, enqueues a build, and the build writes per-tenant artifacts to R2
+#   that nginx serves. It is the pantry pattern applied to documents: the
+#   substrate runs the ingest and the registry; the artifacts are static.
+name: press
+
+description: The cafaye documentation service — ingest, build and tenant-isolated artifacts for docs and notes, behind one BSL binary.
+
+language: go
+core: ^0.2.0
+
+# press serves HTTP (the ingest API), and consumes identity (the JWKS it
+# verifies caller tokens against) and storage (R2, S3 API). The consumes
+# entries below are the contract-level statement of both; the middleware
+# shape is identity's, the same one gateway and parlor already speak.
+exposes:
+  http:
+    port: 8080
+
+consumes:
+  - identity
+  - storage
+
+repository:
+  url: git@github.com:cafaye/press.git
+  defaultBranch: master
+  visibility: private
+
+owner:
+  team: docs
+  contact: docs@cafaye.com
