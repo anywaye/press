@@ -98,3 +98,30 @@ func TestGateWithMultipleAllowedAccounts(t *testing.T) {
 		t.Fatalf("account b: code = %d", code)
 	}
 }
+
+func TestHTTPIntrospectorPresentsTheTokenAsItsOwnCaller(t *testing.T) {
+	// identity's introspection route requires a caller; the token asking
+	// about itself is the one caller it admits without an account
+	// relationship. A missing Authorization header is a 401 for every token,
+	// which is how the gate spent its life failing closed for the right
+	// reason and the wrong behavior.
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"active":true,"account_id":"acct"}`))
+	}))
+	defer srv.Close()
+
+	h := NewHTTPIntrospector(srv.URL)
+	in, err := h.Introspect(context.Background(), "opaque-session-token")
+	if err != nil {
+		t.Fatalf("introspect: %v", err)
+	}
+	if gotAuth != "Bearer opaque-session-token" {
+		t.Fatalf("Authorization = %q, want the token presented as its own caller", gotAuth)
+	}
+	if !in.Active || in.AccountID != "acct" {
+		t.Fatalf("introspection = %+v", in)
+	}
+}

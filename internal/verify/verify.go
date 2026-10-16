@@ -66,6 +66,12 @@ func (h *HTTPIntrospector) Introspect(ctx context.Context, token string) (Intros
 		return Introspection{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Self-introspection: identity's route requires a caller, and the token
+	// asking about itself is the one caller it admits without an account
+	// relationship. Without this header the route answers 401 for every
+	// token — a gate that fails closed for the right reason and the wrong
+	// behavior.
+	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return Introspection{}, fmt.Errorf("verify: identity unreachable: %w", err)
