@@ -94,7 +94,25 @@ func (w *Worker) Run(ctx context.Context, b Build, receipt ReceiptSource, engine
 	if err := w.builds.Transition(ctx, b.ID, StateRunning); err != nil {
 		return b.State, err
 	}
+	b.State = StateRunning
+	return w.RunClaimed(ctx, b, receipt, engineRef)
+}
 
+// RunClaimed runs a build the claim loop already moved to running. It exists
+// because the claim takes the row in the same statement that moves it —
+// routing a running build through Run would re-attempt the queued → running
+// move the claim just made. Everything after the move is shared with Run, so
+// a claimed build gets the same terminal-state guarantee: succeeded, or
+// failed with the reason recorded.
+func (w *Worker) RunClaimed(ctx context.Context, b Build, receipt ReceiptSource, engineRef string) (State, error) {
+	if b.State != StateRunning {
+		return b.State, fmt.Errorf("builds: build %s is %s, not running", b.ID, b.State)
+	}
+	return w.finish(ctx, b, receipt, engineRef)
+}
+
+// finish runs the build's steps and records where it landed.
+func (w *Worker) finish(ctx context.Context, b Build, receipt ReceiptSource, engineRef string) (State, error) {
 	if err := w.run(ctx, b, receipt, engineRef); err != nil {
 		_ = w.builds.Transition(ctx, b.ID, StateFailed)
 		return StateFailed, fmt.Errorf("builds: build %s: %w", b.ID, err)
