@@ -10,7 +10,9 @@ caller's tenant prefix.
 **The tenant is the token's `account_id`, never a request field.** The ingest
 API has no tenant parameter; a caller that sends one is refused. Every object
 key is derived from the verified account (`internal/store/keys.go`), and
-every table row carries `tenant_id` with every statement filtering by it. The
+every table row carries `tenant_id`. What scopes a statement — and the
+by-id reads and the fleet-wide claim that deliberately do not — is declared
+statement by statement in `tenancy.yml`. The
 isolation is a property of the layout, not of a policy someone has to
 remember to apply.
 

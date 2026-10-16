@@ -32,7 +32,9 @@ name one.** There is no tenant field in the ingest API, and a caller that
 sends one is refused rather than ignored. The tarball's key is computed from
 the verified account and a server-generated receipt id, so a caller cannot
 aim its upload at another tenant's prefix, and every table row carries
-`tenant_id` and every statement filters by it.
+`tenant_id`. The statements that answer a question about one tenant filter by
+it; the fleet-wide claim and the by-id reads deliberately do not, and
+`tenancy.yml` names each of those sites statement by statement.
 
 ## Layout
 

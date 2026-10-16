@@ -241,19 +241,51 @@ func TestRunBuildExtractsTheNotesKindIntoTheNotesTree(t *testing.T) {
 }
 
 func TestRunBuildRefusesAReceiptFromAnotherTenant(t *testing.T) {
-	// The one cross-tenant shape this code can be handed. The content never
-	// leaves the function: no fetch, no build, no upload.
+	// The one cross-tenant shape this code can be handed. The tarball IS in
+	// the store under the receipt's own key, so the tenant check is the only
+	// thing that can stop the build: with it removed, this run fetches acme's
+	// content, builds it and uploads it under beta's prefix, and the
+	// zero-counts assertion below is what fails. Without the seeded object the
+	// test would pass on a fetch failure instead — green for a reason it does
+	// not name.
 	w, recs, runner, up, _ := newWorkerTest(t)
 	b, _ := New("b1", "beta", store.KindDocs, "r1", time.Unix(0, 0))
 	_ = recs.Insert(context.Background(), b)
+	key := "tenants/acme/ingest/r1.tar.gz"
+	w.store.(fakeStoreReader).objects[key] = tarball(t, "index.md", "acme's content")
 
-	receipt := ReceiptSource{ID: "r1", Tenant: "acme", Kind: store.KindDocs, ObjectKey: "tenants/acme/ingest/r1.tar.gz"}
+	receipt := ReceiptSource{ID: "r1", Tenant: "acme", Kind: store.KindDocs, ObjectKey: key}
 	state, err := w.Run(context.Background(), b, receipt, "ref")
+	if runner.calls != 0 || up.calls != 0 {
+		t.Fatal("a cross-tenant build ran or uploaded something")
+	}
 	if err == nil || state != StateFailed {
 		t.Fatalf("state = %q err = %v; want failed", state, err)
 	}
+	if stored := recs.rows["b1"]; stored.State != StateFailed {
+		t.Fatalf("stored state = %q, want failed", stored.State)
+	}
+}
+
+func TestRunBuildRefusesAReceiptThatNamesNoTenant(t *testing.T) {
+	// The no-identity arm of the claim path: a receipt row with no tenant is
+	// not any account's, and the worker must not build it for whichever build
+	// happens to be beside it. The tarball IS in the store, so only the tenant
+	// check can refuse it — with the check removed the build succeeds and
+	// uploads, and the zero-counts assertion below is what fails.
+	w, recs, runner, up, _ := newWorkerTest(t)
+	b, _ := New("b1", "acme", store.KindDocs, "r1", time.Unix(0, 0))
+	_ = recs.Insert(context.Background(), b)
+	key := "tenants/acme/ingest/r1.tar.gz"
+	w.store.(fakeStoreReader).objects[key] = tarball(t, "index.md", "content whose receipt names no tenant")
+
+	receipt := ReceiptSource{ID: "r1", Tenant: "", Kind: store.KindDocs, ObjectKey: key}
+	state, err := w.Run(context.Background(), b, receipt, "ref")
 	if runner.calls != 0 || up.calls != 0 {
-		t.Fatal("a cross-tenant build ran or uploaded something")
+		t.Fatal("a receipt naming no tenant was built or uploaded")
+	}
+	if err == nil || state != StateFailed {
+		t.Fatalf("state = %q err = %v; want failed", state, err)
 	}
 	if stored := recs.rows["b1"]; stored.State != StateFailed {
 		t.Fatalf("stored state = %q, want failed", stored.State)

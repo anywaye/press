@@ -18,14 +18,17 @@
 //
 // # WHY THE CLAIM SELECTS BY STATE AND NOT BY TENANT
 //
-// Every other statement in this service filters by tenant_id, because every
-// other statement answers a question about one tenant. The claim answers a
-// different question — "is there work anywhere" — and a tenant filter on it
-// would idle the loop while another tenant's queue waited. The tenant stays
-// on the row (it is written at insert and read back on claim), and the
-// worker refuses a receipt whose tenant is not the build's, so the claim's
-// breadth never becomes a breadth of writes: the upload target is the
-// claimed record's own prefix.
+// Get, Transition and the receipt read below reach a row by its primary key
+// with no tenant predicate either, but their ids are chosen inside the
+// service — a claimed row, or a row the worker already holds. The claim's
+// breadth is different in kind: it answers "is there work anywhere", for
+// every tenant at once, and a tenant filter on it would idle the loop while
+// another tenant's queue waited. The tenant stays on the row (it is written
+// at insert and read back on claim), and the worker refuses a receipt whose
+// tenant is not the build's, so the claim's breadth never becomes a breadth
+// of writes: the upload target is the claimed record's own prefix. Every one
+// of these sites is named and reasoned in tenancy.yml at this repository's
+// root, so the statement does not have to be trusted to be audited.
 package builds
 
 import (

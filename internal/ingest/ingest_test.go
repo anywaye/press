@@ -291,6 +291,37 @@ func TestParseRequestRejectsAFormThatNamesATenantField(t *testing.T) {
 	}
 }
 
+func TestIngestHandlerRefusesAFormThatNamesAnotherTenantAndWritesNothing(t *testing.T) {
+	// The other-account arm of the ingest route, driven through the real
+	// handler: the credential is VALID and belongs to beta-org, and the body
+	// claims a different tenant. The refusal happens before anything is
+	// written — no object under either prefix, no receipt row — which is the
+	// zero this arm is about. The same caller's well-formed request is the
+	// own-account arm
+	// (TestIngestWritesUnderTheCallersOwnTenantPrefixAndNothingElse).
+	s := newFakeStore()
+	receipts := &fakeReceipts{}
+	svc := newService(t, "beta-org", s, receipts, 1<<20)
+
+	buf, contentType := multipartBodyWithTenant(t, "multipart/form-data", []byte("x"))
+	r := httptest.NewRequest("POST", "/v1/ingest", buf)
+	r.Header.Set("Content-Type", contentType)
+	r.Header.Set("Authorization", "Bearer session-token")
+	w := httptest.NewRecorder()
+
+	svc.Handler().ServeHTTP(w, r)
+
+	if s.calls != 0 {
+		t.Fatal("a form naming another tenant wrote an object")
+	}
+	if len(receipts.rows) != 0 {
+		t.Fatal("a form naming another tenant recorded a receipt")
+	}
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
 // multipartBodyWithTenant is the same form with an extra field no press
 // endpoint documents.
 func multipartBodyWithTenant(t *testing.T, contentType string, content []byte) (*bytes.Buffer, string) {

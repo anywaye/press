@@ -1,9 +1,11 @@
 -- 00001_press.sql — press's schema: the ingest receipts and the builds.
 --
--- Two tables and two principles. First, every row carries tenant_id and
--- every statement in this service filters by it — the same row-level tenancy
--- identity and billing use on the one cluster, where the database is the
--- isolation boundary and the tenant is the isolation within it. Second, both
+-- Two tables and two principles. First, every row carries tenant_id. The
+-- statements that answer a question about one tenant filter by it; the by-id
+-- reads and the fleet-wide build claim deliberately do not, and every such
+-- site is named and reasoned in tenancy.yml at this repository's root — the
+-- application's boundary is the verified account the ingest stamps into the
+-- row, not a predicate on every statement. Second, both
 -- tables are records, not state stores: press never mutates a row's meaning,
 -- only its lifecycle column, and the artifact location is derived from the
 -- tenant and the kind rather than trusted from a caller.
