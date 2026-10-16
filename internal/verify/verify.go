@@ -1,7 +1,7 @@
 // Package verify is the private site's door: a request to /notes/* is
 // admitted when identity resolves its bearer token and the token's account
-// is allowed to read this tenant's notes. It is one endpoint behind traefik's
-// ForwardAuth middleware, and it exists as a separate binary from the ingest
+// is allowed to read this tenant's notes. It is one endpoint behind nginx's
+// auth_request, and it exists as a separate binary from the ingest
 // service because it is on the request path of every private page and the
 // ingest path is on none of them — the two want different failure modes.
 package verify
@@ -106,8 +106,8 @@ func NewGate(i IdentityIntrospector, allowedAccounts []string) *Gate {
 	return &Gate{introspector: i, allowedAccounts: allowed}
 }
 
-// Admit answers the traefik ForwardAuth subrequest. 204 for a caller the
-// gate admits, 401 for one it does not. The body is always empty: traefik
+// Admit answers the nginx auth_request subrequest. 204 for a caller the
+// gate admits, 401 for one it does not. The body is always empty: nginx
 // reads the status, and a body here is a body served to nobody.
 func (g *Gate) Admit(w http.ResponseWriter, r *http.Request) {
 	token, ok := parseBearer(r.Header.Get("Authorization"))
