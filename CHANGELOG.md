@@ -13,8 +13,9 @@ because no such binary exists. All three are corrected, and the correction
 is the content of this entry: nothing else changed.
 
 The Status paragraph now states what exists and what is honestly still
-missing — the deployment (no ingest serving binary yet; claim and migrate
-not running on Contabo; database and R2 credentials not wired), the
+missing — the deployment (every serving binary exists — `cmd/press` serves
+ingest on :8080 — but none runs on Contabo; database and R2 credentials not
+wired), the
 reconciliation run, multi-tenant gating. The Layout table covers
 `cmd/press-migrate`, `cmd/press-claim`, `cmd/press-gate`,
 `internal/migrate`, and `internal/builds/runner.go`. The gate section says
