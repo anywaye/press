@@ -26,6 +26,9 @@ type Config struct {
 
 	// JWKSURL is identity's public key set, where caller tokens are verified.
 	JWKSURL string
+	// IdentityURL is identity's origin, where opaque session tokens are
+	// resolved through the introspection route.
+	IdentityURL string
 
 	// Store is the R2 (S3 API) bucket press ingests into and builds write to.
 	Store Store
@@ -76,6 +79,7 @@ func Load() (Config, error) {
 	}
 
 	c.JWKSURL = envOr("PRESS_JWKS_URL", "https://auth.cafaye.com/.well-known/jwks.json")
+	c.IdentityURL = envOr("PRESS_IDENTITY_URL", "https://auth.cafaye.com")
 
 	c.MaxIngestBytes = DefaultMaxIngestBytes
 	if v := os.Getenv("PRESS_MAX_INGEST_BYTES"); v != "" {
