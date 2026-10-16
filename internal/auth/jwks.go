@@ -42,14 +42,20 @@ type Verifier interface {
 // than poked: identity rotates keys, and a verifier that never refreshes
 // turns a rotation into an outage.
 type JWKSVerifier struct {
-	url     string
-	issuer  string
-	fetch   func(ctx context.Context, url string) (*jose.JSONWebKeySet, error)
-	mu      sync.Mutex
-	cached  *jose.JSONWebKeySet
-	fetched time.Time
-	ttl     time.Duration
-	client  *http.Client
+	url    string
+	issuer string
+	// audience is the one audience this verifier admits. Identity's
+	// session-to-token exchange mints tokens per audience on purpose — a
+	// token minted for billing names billing — and a verifier that skipped
+	// the claim would accept a token minted for any other service, which is
+	// a delegation that widens silently.
+	audience string
+	fetch    func(ctx context.Context, url string) (*jose.JSONWebKeySet, error)
+	mu       sync.Mutex
+	cached   *jose.JSONWebKeySet
+	fetched  time.Time
+	ttl      time.Duration
+	client   *http.Client
 }
 
 // NewJWKSVerifier builds the production verifier. The issuer is expected and
@@ -57,14 +63,22 @@ type JWKSVerifier struct {
 // happens to validate, because "the signature checks out" is not "identity
 // said this".
 func NewJWKSVerifier(jwksURL, issuer string) (*JWKSVerifier, error) {
+	return NewJWKSVerifierFor(jwksURL, issuer, "")
+}
+
+// NewJWKSVerifierFor builds a verifier that admits one audience. press's
+// audience is `press` — the name identity's exchange pattern allows and the
+// one a caller names when exchanging a session for a token to publish with.
+func NewJWKSVerifierFor(jwksURL, issuer, audience string) (*JWKSVerifier, error) {
 	if jwksURL == "" || issuer == "" {
 		return nil, fmt.Errorf("auth: jwks url and issuer are both required")
 	}
 	return &JWKSVerifier{
-		url:    jwksURL,
-		issuer: issuer,
-		ttl:    5 * time.Minute,
-		client: &http.Client{Timeout: 10 * time.Second},
+		url:      jwksURL,
+		issuer:   issuer,
+		audience: audience,
+		ttl:      5 * time.Minute,
+		client:   &http.Client{Timeout: 10 * time.Second},
 	}, nil
 }
 
@@ -101,6 +115,7 @@ func (v *JWKSVerifier) Verify(ctx context.Context, token string) (Claims, error)
 
 	var raw struct {
 		Issuer    string `json:"iss"`
+		Audience  string `json:"aud"`
 		Subject   string `json:"sub"`
 		AccountID string `json:"account_id"`
 		Expiry    int64  `json:"exp"`
@@ -110,6 +125,12 @@ func (v *JWKSVerifier) Verify(ctx context.Context, token string) (Claims, error)
 	}
 	if raw.Issuer != v.issuer {
 		return Claims{}, fmt.Errorf("auth: token issuer is %q, expected %q", raw.Issuer, v.issuer)
+	}
+	if v.audience != "" && raw.Audience != v.audience {
+		// A token minted for another service is not a token for this one.
+		// The exchange mints one audience per token precisely so this check
+		// has something to check.
+		return Claims{}, fmt.Errorf("auth: token audience is %q, expected %q", raw.Audience, v.audience)
 	}
 	if raw.Expiry <= time.Now().Unix() {
 		return Claims{}, fmt.Errorf("auth: token expired")
