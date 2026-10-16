@@ -1,5 +1,5 @@
 // Command press-gate is the private notes site's door: one endpoint that
-// traefik's ForwardAuth middleware subrequests before serving any /notes/*
+// nginx's auth_request subrequests before serving any /notes/*
 // request. It resolves the caller's bearer token through identity's
 // introspection route and admits only accounts on this tenant's allowlist.
 //
@@ -39,7 +39,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	// The ForwardAuth endpoint. traefik calls it for every /notes/* request
+	// The verify endpoint. nginx calls it for every /notes/* request
 	// with the original Authorization header attached.
 	http.HandleFunc("/verify", gate.Admit)
 

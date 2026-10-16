@@ -1,6 +1,30 @@
 # Changelog
 
-## 2026-10-15 (latest) — the gate, live on docs.cafaye.com/notes
+## 2026-10-16 (latest) — the repository is public; its face tells the truth
+
+**Docs only: the README and this file now describe the tree as it is.**
+The repository went public on 2026-10-16 — the BSL license promises
+self-hosting, and a private repository cannot keep that promise — and the
+README still described a tree from several packets ago: a production
+orchestration "not in the tree" that is (the claim loop, `cmd/press-claim`),
+a sandbox worker "not in the tree" that is (the worker with its git engine
+and subprocess runner), and a `go build ./cmd/press` that builds nothing
+because no such binary exists. All three are corrected, and the correction
+is the content of this entry: nothing else changed.
+
+The Status paragraph now states what exists and what is honestly still
+missing — the deployment (every serving binary exists — `cmd/press` serves
+ingest on :8080 — but none runs on Contabo; database and R2 credentials not
+wired), the
+reconciliation run, multi-tenant gating. The Layout table covers
+`cmd/press-migrate`, `cmd/press-claim`, `cmd/press-gate`,
+`internal/migrate`, and `internal/builds/runner.go`. The gate section says
+it is live and where it runs (nginx `auth_request` on the Contabo k3s
+cluster). And `Running it` — which documented a binary that does not exist —
+is replaced by a `Self-hosting` section that documents only binaries that do,
+with the environment each one actually reads.
+
+## 2026-10-15 — the gate, live on docs.cafaye.com/notes
 
 **`cmd/press-gate` is the private notes site's door, and it is deployed.**
 One endpoint answering traefik-side... no — answering nginx's `auth_request`
