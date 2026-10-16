@@ -40,7 +40,10 @@ func TestSubprocessRunnerRunsSyncThenTheTwoBuilds(t *testing.T) {
 		t.Fatalf("build: %v", err)
 	}
 
+	// npm ci is first and non-negotiable: a fresh engine checkout has no
+	// node_modules, and the astro binary is not on PATH until it does.
 	want := [][3]string{
+		{"/engine", "npm", "ci"},
 		{"/engine", "node", "bin/sync-content --source " + content},
 		{"/engine", "npm", "run build:public"},
 		{"/engine", "npm", "run build:notes"},
@@ -68,8 +71,9 @@ func TestSubprocessRunnerStopsAtTheFirstFailureAndNamesIt(t *testing.T) {
 	if !strings.Contains(err.Error(), "build:public") {
 		t.Fatalf("error = %v; want the failing step named", err)
 	}
-	if len(rec.calls) != 2 {
-		t.Fatalf("ran %d steps after the failure, want the run to stop at 2", len(rec.calls))
+	// ci ran, sync ran, build:public failed, build:notes never did.
+	if len(rec.calls) != 3 {
+		t.Fatalf("ran %d steps after the failure, want the run to stop at 3 (ci, sync, build:public)", len(rec.calls))
 	}
 }
 

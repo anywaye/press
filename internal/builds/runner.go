@@ -50,9 +50,14 @@ func shellLine(name string, args []string) string {
 	return strings.Join(append([]string{name}, args...), " ")
 }
 
-// Build runs sync, then the public build, then the notes build.
+// Build installs the engine's dependencies, then syncs, then runs the public
+// and notes builds. `npm ci` is not incidental: a fresh engine checkout has
+// no node_modules and the astro binary is not on PATH until it does — the
+// first tenant build failed on exactly that, in a sandbox where every earlier
+// build had primed its tree.
 func (r *SubprocessRunner) Build(ctx context.Context, engineDir, contentDir string) error {
 	steps := [][]string{
+		{"npm", "ci"},
 		{"node", "bin/sync-content", "--source", contentDir},
 		{"npm", "run", "build:public"},
 		{"npm", "run", "build:notes"},
