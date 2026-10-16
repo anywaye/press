@@ -215,7 +215,13 @@ func (TarExtractor) Extract(_ context.Context, r io.Reader, destDir string) erro
 			}
 		}
 		target := filepath.Join(destDir, filepath.Clean("/"+hdr.Name))
-		if !strings.HasPrefix(target, filepath.Clean(destDir)+string(filepath.Separator)) {
+		// A member whose cleaned path equals the destination is the
+		// tarball's own root entry ("tar -czf ." writes one), and it is not
+		// an escape: the prefix test is for paths strictly INSIDE the
+		// destination, so the root needs its own clause. Refusing it made
+		// every tarball produced with a leading dot unloadable.
+		dest := filepath.Clean(destDir)
+		if target != dest && !strings.HasPrefix(target, dest+string(filepath.Separator)) {
 			return fmt.Errorf("%w: %s", ErrPathEscape, hdr.Name)
 		}
 		if hdr.Typeflag == tar.TypeDir {

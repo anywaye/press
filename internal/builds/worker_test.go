@@ -349,3 +349,29 @@ func TestRunRefusesABuildThatIsNotQueued(t *testing.T) {
 		t.Fatal("a build that is already running was run again")
 	}
 }
+
+func TestTarExtractorAcceptsTheTarballRootEntry(t *testing.T) {
+	// A tarball written with a leading dot (`tar -czf x .`) carries a root
+	// member named "./" — the destination itself. The traversal check must
+	// refuse what leaves the destination and admit what IS it.
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	_ = tw.WriteHeader(&tar.Header{Name: "./", Mode: 0o755, Typeflag: tar.TypeDir})
+	_ = tw.WriteHeader(&tar.Header{Name: "./index.md", Mode: 0o644, Size: 5, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("hello"))
+	_ = tw.Close()
+	_ = gz.Close()
+
+	dest := filepath.Join(t.TempDir(), "content", "docs")
+	if err := (TarExtractor{}).Extract(context.Background(), bytes.NewReader(buf.Bytes()), dest); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "index.md"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Fatalf("content = %q, want the file under the destination", got)
+	}
+}

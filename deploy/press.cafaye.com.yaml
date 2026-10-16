@@ -94,7 +94,7 @@ spec:
             - name: PRESS_ENGINE_REPO
               value: "https://github.com/cafaye/docs.git"
             - name: PRESS_ENGINE_REF
-              value: "234f6e4"
+              value: "4a8f1f4"
             - name: PRESS_POLL_INTERVAL
               value: "30s"
 ---
