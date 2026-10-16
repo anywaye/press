@@ -52,6 +52,11 @@ type Store struct {
 	// AccessKeyID and SecretAccessKey are the R2 credentials.
 	AccessKeyID     string
 	SecretAccessKey string
+	// SessionToken is present when the credentials are R2's temporary
+	// (STS-style) credentials derived from a parent R2 API token — which is
+	// the fleet's shape: a long-lived parent on the box, short-lived derived
+	// credentials, refreshed on a schedule.
+	SessionToken string
 }
 
 // DefaultMaxIngestBytes is 64 MiB: a documentation tarball is markdown and
@@ -97,6 +102,7 @@ func Load() (Config, error) {
 		Bucket:          os.Getenv("PRESS_STORE_BUCKET"),
 		AccessKeyID:     os.Getenv("PRESS_STORE_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("PRESS_STORE_SECRET_ACCESS_KEY"),
+		SessionToken:    os.Getenv("PRESS_STORE_SESSION_TOKEN"),
 	}
 	// The store is not required at boot the way the database is: press
 	// answers /healthz and /readyz without it, and the readiness check is

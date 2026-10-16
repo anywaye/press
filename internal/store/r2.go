@@ -37,23 +37,35 @@ type R2 struct {
 	region   string
 	keyID    string
 	secret   string
-	client   *http.Client
+	// sessionToken is the STS-style token R2's temporary credentials carry.
+	// It joins the signed header set, so it is set before sign() builds them.
+	sessionToken string
+	client       *http.Client
 }
 
 // NewR2 builds a client. The endpoint and bucket are required because every
 // other field has a safe default and these two do not: an empty endpoint
 // silently aims at AWS, which is not where the objects live.
 func NewR2(endpoint, bucket, accessKeyID, secretAccessKey string) (*R2, error) {
+	return NewR2WithToken(endpoint, bucket, accessKeyID, secretAccessKey, "")
+}
+
+// NewR2WithToken builds a client whose credentials carry a session token —
+// the shape of R2's temporary credentials, derived from a parent R2 API
+// token. A SigV4 signature without the token header answers 403 even though
+// the key pair is valid.
+func NewR2WithToken(endpoint, bucket, accessKeyID, secretAccessKey, sessionToken string) (*R2, error) {
 	if endpoint == "" || bucket == "" {
 		return nil, fmt.Errorf("store: endpoint and bucket are required (got endpoint=%q bucket=%q)", endpoint, bucket)
 	}
 	return &R2{
-		endpoint: strings.TrimSuffix(endpoint, "/"),
-		bucket:   bucket,
-		region:   "auto",
-		keyID:    accessKeyID,
-		secret:   secretAccessKey,
-		client:   &http.Client{Timeout: 120 * time.Second},
+		endpoint:     strings.TrimSuffix(endpoint, "/"),
+		bucket:       bucket,
+		region:       "auto",
+		keyID:        accessKeyID,
+		secret:       secretAccessKey,
+		sessionToken: sessionToken,
+		client:       &http.Client{Timeout: 120 * time.Second},
 	}, nil
 }
 
@@ -149,6 +161,15 @@ func (r *R2) sign(req *http.Request, payloadHash []byte, now time.Time) {
 		{"host", host},
 		{"x-amz-content-sha256", req.Header.Get("x-amz-content-sha256")},
 		{"x-amz-date", amzDate},
+	}
+	// The session token is one of the signed headers — and it must also be
+	// SET on the request, not merely signed: a header in the signed set but
+	// absent from the wire is a signature over a header the server never
+	// sees. The first version of this code got that wrong and answered 403
+	// on a valid pair.
+	if r.sessionToken != "" {
+		req.Header.Set("x-amz-security-token", r.sessionToken)
+		headers = append(headers, hv{"x-amz-security-token", r.sessionToken})
 	}
 	sort.Slice(headers, func(i, j int) bool { return headers[i].k < headers[j].k })
 
