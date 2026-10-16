@@ -80,10 +80,24 @@ func (f *fakeReceipts) Insert(_ context.Context, r Receipt) error {
 	return nil
 }
 
+// fakeQueue records what an ingest enqueued.
+type fakeQueue struct {
+	enqueued []Receipt
+	err      error
+}
+
+func (f *fakeQueue) Enqueue(_ context.Context, r Receipt) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.enqueued = append(f.enqueued, r)
+	return nil
+}
+
 // newService builds an ingest service with a stubbed verifier for tenant.
 func newService(t *testing.T, tenant string, s store.Client, receipts Receipts, maxBytes int64) *Service {
 	t.Helper()
-	return NewService(fakeVerifier{claims: auth.Claims{AccountID: tenant, Subject: "user-1"}}, s, receipts, maxBytes)
+	return NewService(fakeVerifier{claims: auth.Claims{AccountID: tenant, Subject: "user-1"}}, s, receipts, &fakeQueue{}, maxBytes)
 }
 
 // multipartBody builds the form press documents: content plus kind, project,
@@ -186,7 +200,7 @@ func TestIngestRefusesAnOverCapTarballBeforeWritingAnything(t *testing.T) {
 
 func TestIngestRefusesAnUnverifiedCaller(t *testing.T) {
 	s := newFakeStore()
-	svc := NewService(fakeVerifier{err: errors.New("token expired")}, s, &fakeReceipts{}, 1<<20)
+	svc := NewService(fakeVerifier{err: errors.New("token expired")}, s, &fakeReceipts{}, &fakeQueue{}, 1<<20)
 	_, status, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("x"))
 	if err == nil || status != 401 {
 		t.Fatalf("status = %d, err = %v; want 401", status, err)
@@ -296,4 +310,42 @@ func multipartBodyWithTenant(t *testing.T, contentType string, content []byte) (
 		t.Fatalf("close form: %v", err)
 	}
 	return &buf, w.FormDataContentType()
+}
+
+func TestIngestEnqueuesTheBuildForItsReceipt(t *testing.T) {
+	// A receipt without a build is a promise nothing keeps: the caller saw
+	// 201 and no one is building their content. The enqueue carries the
+	// receipt's own tenant and kind — the values the artifact prefix is
+	// derived from.
+	s := newFakeStore()
+	receipts := &fakeReceipts{}
+	q := &fakeQueue{}
+	svc := NewService(
+		fakeVerifier{claims: auth.Claims{AccountID: "beta-org", Subject: "user-1"}},
+		s, receipts, q, 1<<20)
+
+	receipt, _, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("x"))
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	if len(q.enqueued) != 1 {
+		t.Fatalf("enqueued %d builds, want exactly 1", len(q.enqueued))
+	}
+	if q.enqueued[0].ID != receipt.ID || q.enqueued[0].Tenant != "beta-org" || q.enqueued[0].Kind != "docs" {
+		t.Fatalf("enqueued %+v, want the receipt's id, tenant and kind", q.enqueued[0])
+	}
+}
+
+func TestIngestReportsWhenTheBuildDoesNotEnqueue(t *testing.T) {
+	// The receipt is a row the caller can act on; the missing build is the
+	// difference between "your content arrived" and "your content is being
+	// built". A 500 with the reason keeps the caller's retry able to
+	// produce one.
+	s := newFakeStore()
+	q := &fakeQueue{err: errors.New("db down")}
+	svc := NewService(fakeVerifier{claims: auth.Claims{AccountID: "beta-org"}}, s, &fakeReceipts{}, q, 1<<20)
+	_, status, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("x"))
+	if err == nil || status != 500 {
+		t.Fatalf("status = %d, err = %v; want 500 naming the enqueue", status, err)
+	}
 }

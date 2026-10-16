@@ -55,7 +55,20 @@ type Service struct {
 	verifier auth.Verifier
 	store    store.Client
 	receipts Receipts
+	// queues enqueues the build for a receipt, in the same request that
+	// records it. A receipt without a build is a promise nothing keeps:
+	// the caller saw 201 and no one is building their content. Found by
+	// publishing to a live press and watching the builds table stay empty.
+	queues   Queue
 	maxBytes int64
+}
+
+// Queue enqueues the build a receipt exists to feed. PressPosts's
+// implementation writes the receipt and the build in one transaction (the
+// repository's shape); the interface is here so the behavior tests can watch
+// what an ingest enqueues without a database.
+type Queue interface {
+	Enqueue(ctx context.Context, receipt Receipt) error
 }
 
 // Receipts is the receipt table's behavior: remember an ingest, never
@@ -64,8 +77,8 @@ type Receipts interface {
 	Insert(ctx context.Context, r Receipt) error
 }
 
-func NewService(v auth.Verifier, s store.Client, receipts Receipts, maxBytes int64) *Service {
-	return &Service{verifier: v, store: s, receipts: receipts, maxBytes: maxBytes}
+func NewService(v auth.Verifier, s store.Client, receipts Receipts, queues Queue, maxBytes int64) *Service {
+	return &Service{verifier: v, store: s, receipts: receipts, queues: queues, maxBytes: maxBytes}
 }
 
 // Request is the parsed form press accepts. There is deliberately no Tenant
@@ -190,6 +203,15 @@ func (s *Service) Ingest(ctx context.Context, token string, req Request, body io
 		// ingest/ objects with no receipt row. Returning 500 says so
 		// instead of hiding a lost receipt behind a 201.
 		return Receipt{}, http.StatusInternalServerError, fmt.Errorf("ingest: object written to %s but the receipt did not record: %w", key, err)
+	}
+	if s.queues != nil {
+		if err := s.queues.Enqueue(ctx, receipt); err != nil {
+			// The receipt is a row the caller can act on; the missing
+			// build is the difference between "your content arrived" and
+			// "your content is being built". A 500 with the reason keeps
+			// the caller's retry able to produce a build.
+			return Receipt{}, http.StatusInternalServerError, fmt.Errorf("ingest: receipt %s recorded but the build did not enqueue: %w", receipt.ID, err)
+		}
 	}
 	return receipt, http.StatusCreated, nil
 }
