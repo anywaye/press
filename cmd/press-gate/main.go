@@ -1,7 +1,9 @@
 // Command press-gate is the private notes site's door: one endpoint that
 // nginx's auth_request subrequests before serving any /notes/*
-// request. It resolves the caller's bearer token through identity's
-// introspection route and admits only accounts on this tenant's allowlist.
+// request. It resolves the caller's bearer token through identity — JWTs
+// against identity's key set (with an audience check), opaque session
+// tokens through identity's introspection route — and admits only accounts
+// on this tenant's allowlist.
 //
 // Separate from the ingest binary on purpose: the ingest path is written for
 // throughput and the door is on the path of every private page view, so a
@@ -9,22 +11,66 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/cafaye/press/internal/auth"
 	"github.com/cafaye/press/internal/verify"
 )
+
+// introspectionAdapter joins the gate's introspector to the chain's interface:
+// same route, same answer, two packages that must not import each other's
+// types (the gate serves, the chain verifies).
+type introspectionAdapter struct {
+	inner *verify.HTTPIntrospector
+}
+
+func (a introspectionAdapter) Introspect(ctx context.Context, token string) (auth.Introspection, error) {
+	in, err := a.inner.Introspect(ctx, token)
+	if err != nil {
+		return auth.Introspection{}, err
+	}
+	return auth.Introspection{Active: in.Active, AccountID: in.AccountID}, nil
+}
+
+// verifierAdapter exposes the chain verifier to the gate as an account id.
+type verifierAdapter struct {
+	inner auth.Verifier
+}
+
+func (a verifierAdapter) Verify(ctx context.Context, token string) (string, error) {
+	claims, err := a.inner.Verify(ctx, token)
+	if err != nil {
+		return "", err
+	}
+	return claims.AccountID, nil
+}
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	listen := envOr("PRESS_GATE_ADDR", ":8081")
 	identityURL := envOr("PRESS_IDENTITY_URL", "https://auth.cafaye.com")
+	jwksURL := envOr("PRESS_JWKS_URL", "https://auth.cafaye.com/.well-known/jwks.json")
+	audience := envOr("PRESS_NOTES_AUDIENCE", "notes")
 	allowed := splitCSV(os.Getenv("PRESS_NOTES_ACCOUNTS"))
 
-	gate := verify.NewGate(verify.NewHTTPIntrospector(identityURL), allowed)
+	// The verifier: JWTs via identity's key set (audience `notes`), opaque
+	// tokens via identity's introspection route — the same route the ingest
+	// binary's chain verifier lives on. A caller holds whichever credential
+	// their login minted, and both name the tenant.
+	jwks, err := auth.NewJWKSVerifierFor(jwksURL, "https://auth.cafaye.com", audience)
+	if err != nil {
+		slog.Error("press-gate: jwks verifier", "error", err)
+		os.Exit(1)
+	}
+	verifier := auth.ChainVerifier{JWT: jwks, Introspector: introspectionAdapter{
+		inner: verify.NewHTTPIntrospector(identityURL),
+	}}
+	gate := verify.NewGate(verifierAdapter{inner: verifier}, allowed)
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -43,7 +89,7 @@ func main() {
 	// with the original Authorization header attached.
 	http.HandleFunc("/verify", gate.Admit)
 
-	slog.Info("press-gate: listening", "addr", listen, "identity", identityURL, "allowed_accounts", len(allowed))
+	slog.Info("press-gate: listening", "addr", listen, "identity", identityURL, "jwks", jwksURL, "audience", audience, "allowed_accounts", len(allowed))
 	if err := http.ListenAndServe(listen, nil); err != nil {
 		slog.Error("press-gate: exit", "error", err)
 		os.Exit(1)

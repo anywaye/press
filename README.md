@@ -19,8 +19,7 @@ live in front of docs.cafaye.com/notes. What is honestly still missing: the
 deployment — every serving binary exists but none runs on Contabo yet:
 `cmd/press` serves the ingest API on `:8080` (`r.Mount("/v1/ingest",
 ingestSvc.Handler())`), and `cmd/press-claim` and `cmd/press-migrate` are
-built — but no image is pushed, nothing schedules them, and the press
-database and R2 credentials are not wired; the reconciliation run (ingest objects with no
+built — but no image is pushed, nothing schedules them, and the reconciliation run (ingest objects with no
 receipt row, receipt rows whose build never finished); and multi-tenant
 gating (the gate admits one allowlist; per-team RBAC is consciously
 deferred).

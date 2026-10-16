@@ -11,20 +11,22 @@ import (
 // Behavior tests for the door: each names a request the gate must admit or
 // refuse, driven through the real handler with a fake identity.
 
-// fakeIntrospector answers from a table, and can fail the way an outage does.
-type fakeIntrospector struct {
-	claims map[string]Introspection
-	err    error
+// fakeVerifier answers from a table, and can fail the way an outage does. It
+// stands in for identity's chain verifier: a known token resolves to its
+// account id, an unknown one to an error (the gate turns either into 401).
+type fakeVerifier struct {
+	accounts map[string]string // token -> account id
+	err     error
 }
 
-func (f *fakeIntrospector) Introspect(_ context.Context, token string) (Introspection, error) {
+func (f *fakeVerifier) Verify(_ context.Context, token string) (string, error) {
 	if f.err != nil {
-		return Introspection{}, f.err
+		return "", f.err
 	}
-	if c, ok := f.claims[token]; ok {
-		return c, nil
+	if acct, ok := f.accounts[token]; ok {
+		return acct, nil
 	}
-	return Introspection{Active: false}, nil
+	return "", errors.New("verify: token not active")
 }
 
 func admit(t *testing.T, g *Gate, token string) int {
@@ -39,8 +41,8 @@ func admit(t *testing.T, g *Gate, token string) int {
 }
 
 func TestGateAdmitsATokenForAnAllowedAccount(t *testing.T) {
-	g := NewGate(&fakeIntrospector{claims: map[string]Introspection{
-		"good": {Active: true, AccountID: "acct-cafaye"},
+	g := NewGate(&fakeVerifier{accounts: map[string]string{
+		"good": "acct-cafaye",
 	}}, []string{"acct-cafaye"})
 	if code := admit(t, g, "good"); code != http.StatusNoContent {
 		t.Fatalf("code = %d, want 204", code)
@@ -51,11 +53,9 @@ func TestGateRefusesEveryWrongCallerWithTheSame401(t *testing.T) {
 	// The shapes that must all answer 401 — and answer it identically, so
 	// the endpoint cannot be used to tell a forged token from a valid one
 	// belonging to another org.
-	ident := &fakeIntrospector{claims: map[string]Introspection{
-		"good":         {Active: true, AccountID: "acct-cafaye"},
-		"other-org":    {Active: true, AccountID: "acct-acme"},
-		"revoked":      {Active: false, AccountID: "acct-cafaye"},
-		"unresolvable": {},
+	ident := &fakeVerifier{accounts: map[string]string{
+		"good":      "acct-cafaye",
+		"other-org": "acct-acme",
 	}}
 	g := NewGate(ident, []string{"acct-cafaye"})
 	for _, token := range []string{"other-org", "revoked", "unresolvable", ""} {
@@ -68,7 +68,7 @@ func TestGateRefusesEveryWrongCallerWithTheSame401(t *testing.T) {
 func TestGateFailsClosedWhenIdentityIsUnreachable(t *testing.T) {
 	// An outage is a closed door, never an open one: a notes site unreadable
 	// for a minute beats a notes site readable by everyone for a minute.
-	g := NewGate(&fakeIntrospector{err: errors.New("dial tcp: connection refused")}, []string{"acct-cafaye"})
+	g := NewGate(&fakeVerifier{err: errors.New("dial tcp: connection refused")}, []string{"acct-cafaye"})
 	if code := admit(t, g, "any-token"); code != http.StatusUnauthorized {
 		t.Fatalf("code = %d, want 401", code)
 	}
@@ -78,8 +78,8 @@ func TestGateWithNoAllowedAccountsRefusesEveryone(t *testing.T) {
 	// A misconfigured gate — no allowlist — is closed, not open. This is the
 	// assertion that makes the allowlist's absence a deployment failure
 	// instead of an open private site.
-	g := NewGate(&fakeIntrospector{claims: map[string]Introspection{
-		"good": {Active: true, AccountID: "acct-cafaye"},
+	g := NewGate(&fakeVerifier{accounts: map[string]string{
+		"good": "acct-cafaye",
 	}}, nil)
 	if code := admit(t, g, "good"); code != http.StatusUnauthorized {
 		t.Fatalf("code = %d, want 401", code)
@@ -87,9 +87,9 @@ func TestGateWithNoAllowedAccountsRefusesEveryone(t *testing.T) {
 }
 
 func TestGateWithMultipleAllowedAccounts(t *testing.T) {
-	g := NewGate(&fakeIntrospector{claims: map[string]Introspection{
-		"a": {Active: true, AccountID: "acct-one"},
-		"b": {Active: true, AccountID: "acct-two"},
+	g := NewGate(&fakeVerifier{accounts: map[string]string{
+		"a": "acct-one",
+		"b": "acct-two",
 	}}, []string{"acct-one", "acct-two"})
 	if code := admit(t, g, "a"); code != http.StatusNoContent {
 		t.Fatalf("account a: code = %d", code)

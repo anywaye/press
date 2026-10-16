@@ -17,11 +17,14 @@ import (
 	"time"
 )
 
-// IdentityIntrospector resolves a token to claims. The production
-// implementation is identity's POST /v1/introspections; an interface so the
-// behavior tests run without a live identity.
-type IdentityIntrospector interface {
-	Introspect(ctx context.Context, token string) (Introspection, error)
+// IdentityVerifier resolves a bearer token to the account it names. The
+// production implementation is a chain: JWTs are verified against identity's
+// key set (with an audience check), opaque tokens through identity's
+// introspection route. Either way the answer is an account id or an error,
+// so the gate can treat "forged", "wrong audience", "wrong account" and
+// "unreachable identity" identically — 401, with no oracle.
+type IdentityVerifier interface {
+	Verify(ctx context.Context, token string) (string, error)
 }
 
 // Introspection is the part of identity's answer this gate reads. `Active` is
@@ -96,7 +99,7 @@ func (h *HTTPIntrospector) Introspect(ctx context.Context, token string) (Intros
 
 // Gate decides whether a request passes.
 type Gate struct {
-	introspector    IdentityIntrospector
+	verifier        IdentityVerifier
 	allowedAccounts map[string]bool
 }
 
@@ -104,12 +107,12 @@ type Gate struct {
 // to read this tenant's notes — in v1 the internal tenant's own org(s), one
 // entry per operator account; multi-tenant gating arrives with press's
 // tenant model, and this set is where it plugs in.
-func NewGate(i IdentityIntrospector, allowedAccounts []string) *Gate {
+func NewGate(v IdentityVerifier, allowedAccounts []string) *Gate {
 	allowed := make(map[string]bool, len(allowedAccounts))
 	for _, a := range allowedAccounts {
 		allowed[a] = true
 	}
-	return &Gate{introspector: i, allowedAccounts: allowed}
+	return &Gate{verifier: v, allowedAccounts: allowed}
 }
 
 // Admit answers the nginx auth_request subrequest. 204 for a caller the
@@ -121,15 +124,15 @@ func (g *Gate) Admit(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	claims, err := g.introspector.Introspect(r.Context(), token)
+	accountID, err := g.verifier.Verify(r.Context(), token)
 	if err != nil {
-		// Fail closed: an unreachable identity is a closed door, never an
-		// open one. The notes site being briefly unreadable during an
-		// identity outage is the correct trade.
+		// Fail closed: a forged token, a wrong-audience token, a token for
+		// another org, or an unreachable identity all answer the same 401.
+		// Distinguishing them would turn the gate into an oracle.
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	if !claims.Active || !g.allowedAccounts[claims.AccountID] {
+	if !g.allowedAccounts[accountID] {
 		// A valid token for the wrong org gets the same 401 as a forged
 		// one: the answer must not distinguish "bad token" from "not your
 		// tenant", or the endpoint becomes an account-existence oracle.
