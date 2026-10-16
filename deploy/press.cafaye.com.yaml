@@ -1,0 +1,124 @@
+# press.cafaye.com — the documentation service on the fleet's own box.
+#
+# Two binaries, one shared cluster: `press` serves the ingest API at
+# press.cafaye.com (`cafe docs publish`'s target), and `press-claim` polls
+# for queued builds and runs them. The gate binary (press-gate) already runs
+# in the docs namespace — it fronts docs.cafaye.com/notes and is deployed
+# from cafaye/docs's own manifest.
+#
+# The credentials are NOT in this file, on purpose: `press-db` (the DATABASE_URL
+# to the press database on the one cluster) and `press-store` (the R2 endpoint,
+# bucket and keys) are cluster secrets, created by the operator. A manifest
+# you can read is a manifest without passwords in it.
+#
+# press-claim's image is node + git because the claim loop builds in-process:
+# the GitEngine checks out the docs engine at a pinned ref and the
+# SubprocessRunner runs `node bin/sync-content` and the two astro builds.
+# A scratch image would build nothing but a clear exec error.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: press
+  namespace: press
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: press
+  template:
+    metadata:
+      labels:
+        app: press
+    spec:
+      containers:
+        - name: press
+          image: ghcr.io/cafaye/press:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: press-db
+            - secretRef:
+                name: press-store
+          env:
+            - name: PRESS_JWKS_URL
+              value: "https://auth.cafaye.com/.well-known/jwks.json"
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: press
+  namespace: press
+spec:
+  selector:
+    app: press
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: press-claim
+  namespace: press
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: press-claim
+  template:
+    metadata:
+      labels:
+        app: press-claim
+    spec:
+      containers:
+        - name: press-claim
+          image: ghcr.io/cafaye/press-claim:latest
+          envFrom:
+            - secretRef:
+                name: press-db
+            - secretRef:
+                name: press-store
+          env:
+            # The engine is pinned, on purpose: a build that moved its engine
+            # mid-run is a build whose artifacts nobody can reproduce. The ref
+            # is a tag or a commit on github.com/cafaye/docs — bump it with a
+            # decision, not a side effect.
+            - name: PRESS_ENGINE_REPO
+              value: "https://github.com/cafaye/docs.git"
+            - name: PRESS_ENGINE_REF
+              value: "a5e8d64c84835e3dc5eaf058a4bc9f5a62d82a68"
+            - name: PRESS_CLAIM_INTERVAL
+              value: "30s"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: press
+  namespace: press
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: press.cafaye.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: press
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - press.cafaye.com
+      secretName: press-tls

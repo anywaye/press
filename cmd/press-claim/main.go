@@ -47,11 +47,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// One store, one vocabulary: PRESS_STORE_* is what internal/config reads
+	// and what the deployment's secret provides. This binary used to read
+	// PRESS_R2_* — a second name the secret never set — so the claim loop
+	// exited at startup while the ingest binary beside it was fine. Found by
+	// deploying: the two pods, one store, one env map.
 	r2, err := store.NewR2(
-		os.Getenv("PRESS_R2_ENDPOINT"),
-		os.Getenv("PRESS_R2_BUCKET"),
-		os.Getenv("PRESS_R2_ACCESS_KEY_ID"),
-		os.Getenv("PRESS_R2_SECRET_ACCESS_KEY"),
+		os.Getenv("PRESS_STORE_ENDPOINT"),
+		os.Getenv("PRESS_STORE_BUCKET"),
+		os.Getenv("PRESS_STORE_ACCESS_KEY_ID"),
+		os.Getenv("PRESS_STORE_SECRET_ACCESS_KEY"),
 	)
 	if err != nil {
 		slog.Error("press-claim: object store is not configured", "error", err)
