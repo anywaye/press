@@ -1,1 +1,7 @@
 press
+
+# The `cf` CLI's local cache, committed by accident on a checkout where the
+# tool had run. It holds the account id the tool resolved on THAT machine and
+# nothing here reads it; every `cf` invocation rewrites it. The same failure
+# mode as the other generated-file entries: one `git add -A` from coming back.
+/.cloudflare/
