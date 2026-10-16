@@ -15,15 +15,12 @@ package migrate
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"log/slog"
-	"net/url"
-	"os"
 	"testing"
 
+	"github.com/cafaye/press/internal/platform/dbtest"
 	"github.com/cafaye/press/migrations"
 )
 
@@ -42,7 +39,7 @@ func TestRunRefusesWithNoDSN(t *testing.T) {
 // contract: the first apply creates what the service reads and writes, and
 // the re-run the substrate performs on every image change applies nothing.
 func TestAnEmptyDatabaseGrowsTheTablesAndASecondRunIsANoop(t *testing.T) {
-	dsn := newScratchDatabase(t)
+	dsn := dbtest.ScratchDatabase(t, "press_migrate_")
 	ctx := context.Background()
 
 	first, err := Run(ctx, dsn, migrations.FS, testLogger(t))
@@ -70,61 +67,6 @@ func TestAnEmptyDatabaseGrowsTheTablesAndASecondRunIsANoop(t *testing.T) {
 		t.Errorf("a second run against the same database applied %v; the deploy's "+
 			"re-run depends on this being empty", second)
 	}
-}
-
-// newScratchDatabase creates a database for one test and returns a DSN for
-// it. A DATABASE AND NOT A SCHEMA: production is a database of its own, and a
-// private `search_path` would be a second, quieter schema model production
-// does not have. The database is dropped on the way out.
-//
-// It SKIPS rather than fails when there is no server or no CREATEDB: the
-// suite must stay green with no database, and a red here would read like a
-// code failure when it is really a missing server.
-func newScratchDatabase(t *testing.T) string {
-	t.Helper()
-
-	base := os.Getenv("TEST_DATABASE_URL")
-	if base == "" {
-		t.Skipf("TEST_DATABASE_URL is not set, so there is no server to migrate against")
-	}
-
-	ctx := context.Background()
-	admin, err := sql.Open("pgx", base)
-	if err != nil {
-		t.Skipf("opening an admin connection to TEST_DATABASE_URL: %v", err)
-	}
-	t.Cleanup(func() { _ = admin.Close() })
-	if err := admin.PingContext(ctx); err != nil {
-		t.Skipf("TEST_DATABASE_URL is set but not reachable (%v). Is the server up?", err)
-	}
-
-	name := "press_migrate_" + randomSuffix(t)
-
-	if _, err := admin.ExecContext(ctx, `create database "`+name+`"`); err != nil {
-		t.Skipf("creating the scratch database %s (does TEST_DATABASE_URL's user hold CREATEDB?): %v", name, err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(context.Background(), `drop database if exists "`+name+`"`); err != nil {
-			t.Errorf("dropping the scratch database %s: %v", name, err)
-		}
-	})
-
-	parsed, err := url.Parse(base)
-	if err != nil {
-		t.Fatalf("parsing TEST_DATABASE_URL: %v", err)
-	}
-	parsed.Path = "/" + name
-	return parsed.String()
-}
-
-func randomSuffix(t *testing.T) string {
-	t.Helper()
-
-	var noise [6]byte
-	if _, err := rand.Read(noise[:]); err != nil {
-		t.Fatalf("generating a database name: %v", err)
-	}
-	return hex.EncodeToString(noise[:])
 }
 
 // tableExists asks the database, not the error, whether a migration ran.
