@@ -1,4 +1,18 @@
-press
+# `/press`, ANCHORED, and the leading slash is the whole point rather than style.
+#
+# Unanchored, `press` matches a file OR DIRECTORY named `press` at ANY depth —
+# which includes `cmd/press/`, this service's own serving entry point. Measured
+# on the tree that carried it: `git check-ignore -v cmd/press/main.go` answered
+# `.gitignore:1:press`, `git ls-files cmd/press` was empty, and a clean checkout
+# held `cmd/press-migrate/`, `cmd/press-claim/` and `cmd/press-gate/` while the
+# binary that actually serves `/v1/ingest` existed only on the machine that wrote
+# it. `mise run build` is `go build ./cmd/press`, so a fresh clone could not build
+# the service at all — and the failure names a missing DIRECTORY, which reads as a
+# tree that never had one rather than as a file an ignore rule was hiding.
+#
+# What it is meant to ignore is the compiled binary at the repository root, which
+# is what `/press` matches and nothing else.
+/press
 
 # The `cf` CLI's local cache, committed by accident on a checkout where the
 # tool had run. It holds the account id the tool resolved on THAT machine and
