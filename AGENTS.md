@@ -48,3 +48,6 @@ prefix. Every failure lands the record on `failed` with its reason.
   without it) and never pretends to be an offline test when it is not.
 - One Postgres cluster, one database per service. press connects to the press
   database and its role owns nothing else.
+
+## Secrets
+- No `.env` files with values. Use `cafe secret set/get/list` (dev) and `cafe dev` (injects). See `docs/secrets.md`.

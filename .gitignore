@@ -19,3 +19,5 @@
 # nothing here reads it; every `cf` invocation rewrites it. The same failure
 # mode as the other generated-file entries: one `git add -A` from coming back.
 /.cloudflare/
+keyring/
+secrets/
