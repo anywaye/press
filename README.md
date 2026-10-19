@@ -1,5 +1,7 @@
 # press
 
+**Current direction (2026-10-19):** Ship is the product. The cafaye stack is internal infrastructure; we are not selling or supporting it as a standalone product as of this date. We continue to develop and improve it, treating the founder as the primary customer and keeping "build once, run everywhere" true, with the expectation that it may be offered again later.
+
 The cafaye documentation service. **`cafe docs publish` sends it a tarball;
 press files the tarball, records the ingest, and enqueues the build whose
 artifacts nginx serves.** BSL 1.1 (`Change License: Apache-2.0`, four years
@@ -73,7 +75,7 @@ is refused), the object store (`PRESS_R2_ENDPOINT`, `PRESS_R2_BUCKET`,
 `PRESS_POLL_INTERVAL` (default 5s). `press-gate` needs `PRESS_IDENTITY_URL`
 and `PRESS_NOTES_ACCOUNTS` (comma-separated; empty means a closed door),
 listening on `PRESS_GATE_ADDR` (default `:8081`); wire your frontend's
-`auth_request` at its `/verify` endpoint the way cafaye/docs
+`auth_request` at its `/verify` endpoint the way cafaye/loom
 `deploy/docs.cafaye.com.yaml` wires nginx.
 
 What you get, honestly: the migrate/claim/gate binaries run; the gate doors
@@ -107,7 +109,7 @@ and size are the exact bytes sent; the lifecycle refuses backward moves.
 The private notes site's door, **deployed and live** in front of
 docs.cafaye.com/notes: it runs on the Contabo k3s cluster, where nginx's
 `auth_request` subrequests its `/verify` endpoint before serving any notes
-request (manifest: cafaye/docs `deploy/docs.cafaye.com.yaml`).
+request (manifest: cafaye/loom `deploy/docs.cafaye.com.yaml`).
 It resolves the caller through identity's introspection route and admits only
 `PRESS_NOTES_ACCOUNTS` — today the operator account that owns the notes;
 press's tenant model is where per-org gating arrives. Failures are closed: an
