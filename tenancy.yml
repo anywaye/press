@@ -2,7 +2,7 @@
 #
 # Checked by cafaye/core's contract harness:
 #
-#     bash /Users/kaka/Code/any/moon/cafaye/core/harness/bin/tenancy-check .
+#     bash /Users/kaka/Code/any/cafaye/core/harness/bin/tenancy-check .
 #
 # It must report 0 failures. The two warnings it reports are named at the
 # bottom, with why each is the honest residue of a SQL scanner reading a Go
