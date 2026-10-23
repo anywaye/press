@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/store"
 )
 
 // DirUploader copies a built directory tree into the store under a prefix —

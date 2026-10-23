@@ -40,7 +40,7 @@ prefix. Every failure lands the record on `failed` with its reason.
 
 ## Working agreements
 
-- The house rules apply here too: SSH remotes for the repositories cafaye owns, and tests first: write the test, watch it fail, then implement.
+- The house rules apply here too: SSH remotes for the repositories anywaye owns, and tests first: write the test, watch it fail, then implement.
 - **Never push to master from a worker packet**; the manager merges.
 - Tests are behavior tests: name the behavior, drive the path with fakes,
   never write a test whose subject is the framework. A test that needs

@@ -57,7 +57,7 @@ cluster). And `Running it` — which documented a binary that does not exist —
 is replaced by a `Self-hosting` section that documents only binaries that do,
 with the environment each one actually reads.
 
-## 2026-10-15 — the gate, live on docs.cafaye.com/notes
+## 2026-10-15 — the gate, live on docs.anywaye.com/notes
 
 **`cmd/press-gate` is the private notes site's door, and it is deployed.**
 One endpoint answering traefik-side... no — answering nginx's `auth_request`
@@ -69,7 +69,7 @@ one, so the door is not an account-existence oracle; an identity outage is a
 closed door, never an open one; an empty allowlist is a closed door, logged
 at startup.
 
-The deployment lives in cafaye/docs `deploy/docs.cafaye.com.yaml`. The
+The deployment lives in anywaye/docs `deploy/docs.anywaye.com.yaml`. The
 middleware-with-traefik approach was tried first and failed silently — the
 notes home served to the open internet — which is why the subrequest lives
 in nginx's own config now.
@@ -103,7 +103,7 @@ extraction is worse than one that failed loudly.
 **The worker pins the engine ref it built against**, so a behavior change in
 the engine is diagnosable per build rather than a fleet-wide surprise.
 
-The cafaye/docs engine gained the matching half in the same window:
+The anywaye/docs engine gained the matching half in the same window:
 `bin/sync-content --source <dir>` builds one tenant's content into the two
 trees with no fleet beside it — the tenant build is the same build with one
 tenant's content, not a weaker one.

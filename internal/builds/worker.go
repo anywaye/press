@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cafaye/press/internal/ingest"
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/ingest"
+	"github.com/anywaye/press/internal/store"
 )
 
 // The worker turns a receipt into artifacts: claim a queued build, fetch the
@@ -30,7 +30,7 @@ type Extractor interface {
 }
 
 // Engine provides the docs engine at a pinned ref, checked out to a
-// directory. press's implementation clones cafaye/docs; a build pinned to a
+// directory. press's implementation clones anywaye/docs; a build pinned to a
 // ref is reproducible, and a ref not pinned is a build that changes under a
 // site.
 type Engine interface {

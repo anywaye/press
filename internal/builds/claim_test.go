@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/store"
 )
 
 // claimStoreFake is the smallest Records-plus-Claim that can lie. The mutex

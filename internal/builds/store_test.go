@@ -18,10 +18,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/cafaye/press/internal/migrate"
-	"github.com/cafaye/press/internal/platform/dbtest"
-	"github.com/cafaye/press/internal/store"
-	"github.com/cafaye/press/migrations"
+	"github.com/anywaye/press/internal/migrate"
+	"github.com/anywaye/press/internal/platform/dbtest"
+	"github.com/anywaye/press/internal/store"
+	"github.com/anywaye/press/migrations"
 )
 
 // openMigratedPool migrates a scratch database and returns a pool on it. The

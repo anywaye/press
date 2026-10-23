@@ -42,8 +42,8 @@ func admit(t *testing.T, g *Gate, token string) int {
 
 func TestGateAdmitsATokenForAnAllowedAccount(t *testing.T) {
 	g := NewGate(&fakeVerifier{accounts: map[string]string{
-		"good": "acct-cafaye",
-	}}, []string{"acct-cafaye"})
+		"good": "acct-anywaye",
+	}}, []string{"acct-anywaye"})
 	if code := admit(t, g, "good"); code != http.StatusNoContent {
 		t.Fatalf("code = %d, want 204", code)
 	}
@@ -54,10 +54,10 @@ func TestGateRefusesEveryWrongCallerWithTheSame401(t *testing.T) {
 	// the endpoint cannot be used to tell a forged token from a valid one
 	// belonging to another org.
 	ident := &fakeVerifier{accounts: map[string]string{
-		"good":      "acct-cafaye",
+		"good":      "acct-anywaye",
 		"other-org": "acct-acme",
 	}}
-	g := NewGate(ident, []string{"acct-cafaye"})
+	g := NewGate(ident, []string{"acct-anywaye"})
 	for _, token := range []string{"other-org", "revoked", "unresolvable", ""} {
 		if code := admit(t, g, token); code != http.StatusUnauthorized {
 			t.Fatalf("token %q: code = %d, want 401", token, code)
@@ -68,7 +68,7 @@ func TestGateRefusesEveryWrongCallerWithTheSame401(t *testing.T) {
 func TestGateFailsClosedWhenIdentityIsUnreachable(t *testing.T) {
 	// An outage is a closed door, never an open one: a notes site unreadable
 	// for a minute beats a notes site readable by everyone for a minute.
-	g := NewGate(&fakeVerifier{err: errors.New("dial tcp: connection refused")}, []string{"acct-cafaye"})
+	g := NewGate(&fakeVerifier{err: errors.New("dial tcp: connection refused")}, []string{"acct-anywaye"})
 	if code := admit(t, g, "any-token"); code != http.StatusUnauthorized {
 		t.Fatalf("code = %d, want 401", code)
 	}
@@ -79,7 +79,7 @@ func TestGateWithNoAllowedAccountsRefusesEveryone(t *testing.T) {
 	// assertion that makes the allowlist's absence a deployment failure
 	// instead of an open private site.
 	g := NewGate(&fakeVerifier{accounts: map[string]string{
-		"good": "acct-cafaye",
+		"good": "acct-anywaye",
 	}}, nil)
 	if code := admit(t, g, "good"); code != http.StatusUnauthorized {
 		t.Fatalf("code = %d, want 401", code)

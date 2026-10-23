@@ -10,7 +10,7 @@ import (
 // SubprocessRunner runs the docs engine's v1 build inside a checked-out
 // engine directory: sync the tenant's content tree, then the two astro builds
 // — the public docs site and the private notes site. The three commands are
-// the engine's own interface (cafaye/docs `package.json`: `sync`,
+// the engine's own interface (anywaye/docs `package.json`: `sync`,
 // `build:public`, `build:notes`), read here rather than restated, so an
 // engine rename breaks loudly at the failing step instead of building half a
 // site quietly.

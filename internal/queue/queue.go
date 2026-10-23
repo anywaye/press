@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cafaye/press/internal/builds"
-	"github.com/cafaye/press/internal/ingest"
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/builds"
+	"github.com/anywaye/press/internal/ingest"
+	"github.com/anywaye/press/internal/store"
 )
 
 // QueueOnBuilds adapts the builds store to the ingest path's Queue: an

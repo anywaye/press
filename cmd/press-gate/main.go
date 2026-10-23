@@ -17,8 +17,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cafaye/press/internal/auth"
-	"github.com/cafaye/press/internal/verify"
+	"github.com/anywaye/press/internal/auth"
+	"github.com/anywaye/press/internal/verify"
 )
 
 // introspectionAdapter joins the gate's introspector to the chain's interface:
@@ -53,8 +53,8 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	listen := envOr("PRESS_GATE_ADDR", ":8081")
-	identityURL := envOr("PRESS_IDENTITY_URL", "https://auth.cafaye.com")
-	jwksURL := envOr("PRESS_JWKS_URL", "https://auth.cafaye.com/.well-known/jwks.json")
+	identityURL := envOr("PRESS_IDENTITY_URL", "https://auth.anywaye.com")
+	jwksURL := envOr("PRESS_JWKS_URL", "https://auth.anywaye.com/.well-known/jwks.json")
 	audience := envOr("PRESS_NOTES_AUDIENCE", "notes")
 	allowed := splitCSV(os.Getenv("PRESS_NOTES_ACCOUNTS"))
 
@@ -62,7 +62,7 @@ func main() {
 	// tokens via identity's introspection route — the same route the ingest
 	// binary's chain verifier lives on. A caller holds whichever credential
 	// their login minted, and both name the tenant.
-	jwks, err := auth.NewJWKSVerifierFor(jwksURL, "https://auth.cafaye.com", audience)
+	jwks, err := auth.NewJWKSVerifierFor(jwksURL, "https://auth.anywaye.com", audience)
 	if err != nil {
 		slog.Error("press-gate: jwks verifier", "error", err)
 		os.Exit(1)

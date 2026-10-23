@@ -15,7 +15,7 @@
 #   ./deploy/renew-r2.sh --ttl 86400     # renew for a day
 #
 # The parent token file: PRESS_R2_PARENT_TOKEN (default
-# /etc/cafaye/r2-parent-token on the box). It holds the long-lived
+# /etc/anywaye/r2-parent-token on the box). It holds the long-lived
 # `cfat_...` account token whose only permission is Workers R2 Storage
 # Read+Write on the artifacts bucket. If the parent is lost, the
 # credentials cannot be renewed — the dashboard can mint another.
@@ -36,8 +36,8 @@ done
 BOX="${BOX:-contabo}"
 
 ACCOUNT_ID="1e83e8ee4d1b6e51c2f4527ea005804d"
-BUCKET="cafaye-docs-artifacts"
-PARENT_TOKEN_FILE="${PRESS_R2_PARENT_TOKEN:-/etc/cafaye/r2-parent-token}"
+BUCKET="anywaye-docs-artifacts"
+PARENT_TOKEN_FILE="${PRESS_R2_PARENT_TOKEN:-/etc/anywaye/r2-parent-token}"
 
 if [ ! -r "$PARENT_TOKEN_FILE" ]; then
   echo "renew-r2: no parent token at $PARENT_TOKEN_FILE." >&2

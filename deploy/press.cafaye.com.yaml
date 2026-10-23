@@ -1,10 +1,10 @@
-# press.cafaye.com — the documentation service on the fleet's own box.
+# press.anywaye.com — the documentation service on the fleet's own box.
 #
 # Two binaries, one shared cluster: `press` serves the ingest API at
-# press.cafaye.com (`cafe docs publish`'s target), and `press-claim` polls
+# press.anywaye.com (`cafe docs publish`'s target), and `press-claim` polls
 # for queued builds and runs them. The gate binary (press-gate) already runs
-# in the docs namespace — it fronts docs.cafaye.com/notes and is deployed
-# from cafaye/docs's own manifest.
+# in the docs namespace — it fronts docs.anywaye.com/notes and is deployed
+# from anywaye/docs's own manifest.
 #
 # The credentials are NOT in this file, on purpose: `press-db` (the DATABASE_URL
 # to the press database on the one cluster) and `press-store` (the R2 endpoint,
@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: press
-          image: ghcr.io/cafaye/press:latest
+          image: ghcr.io/anywaye/press:latest
           ports:
             - containerPort: 8080
           envFrom:
@@ -43,7 +43,7 @@ spec:
                 name: press-store
           env:
             - name: PRESS_JWKS_URL
-              value: "https://auth.cafaye.com/.well-known/jwks.json"
+              value: "https://auth.anywaye.com/.well-known/jwks.json"
           readinessProbe:
             httpGet:
               path: /readyz
@@ -80,7 +80,7 @@ spec:
     spec:
       containers:
         - name: press-claim
-          image: ghcr.io/cafaye/press-claim:latest
+          image: ghcr.io/anywaye/press-claim:latest
           envFrom:
             - secretRef:
                 name: press-db
@@ -89,10 +89,10 @@ spec:
           env:
             # The engine is pinned, on purpose: a build that moved its engine
             # mid-run is a build whose artifacts nobody can reproduce. The ref
-            # is a tag or a commit on github.com/cafaye/docs — bump it with a
+            # is a tag or a commit on github.com/anywaye/docs — bump it with a
             # decision, not a side effect.
             - name: PRESS_ENGINE_REPO
-              value: "https://github.com/cafaye/docs.git"
+              value: "https://github.com/anywaye/docs.git"
             - name: PRESS_ENGINE_REF
               value: "4a8f1f4"
             - name: PRESS_POLL_INTERVAL
@@ -108,7 +108,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: press.cafaye.com
+    - host: press.anywaye.com
       http:
         paths:
           - path: /
@@ -120,5 +120,5 @@ spec:
                   number: 8080
   tls:
     - hosts:
-        - press.cafaye.com
+        - press.anywaye.com
       secretName: press-tls

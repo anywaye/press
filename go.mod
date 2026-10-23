@@ -1,4 +1,4 @@
-module github.com/cafaye/press
+module github.com/anywaye/press
 
 go 1.26.1
 

@@ -19,9 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cafaye/press/internal/builds"
-	"github.com/cafaye/press/internal/platform/db"
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/builds"
+	"github.com/anywaye/press/internal/platform/db"
+	"github.com/anywaye/press/internal/store"
 )
 
 func main() {

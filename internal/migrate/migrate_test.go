@@ -20,8 +20,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/cafaye/press/internal/platform/dbtest"
-	"github.com/cafaye/press/migrations"
+	"github.com/anywaye/press/internal/platform/dbtest"
+	"github.com/anywaye/press/migrations"
 )
 
 // TestRunRefusesWithNoDSN is the contract with whatever starts the migrate

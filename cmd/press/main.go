@@ -20,14 +20,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/cafaye/press/internal/auth"
-	"github.com/cafaye/press/internal/builds"
-	"github.com/cafaye/press/internal/config"
-	"github.com/cafaye/press/internal/ingest"
-	"github.com/cafaye/press/internal/platform/db"
-	"github.com/cafaye/press/internal/queue"
-	"github.com/cafaye/press/internal/store"
-	"github.com/cafaye/press/internal/verify"
+	"github.com/anywaye/press/internal/auth"
+	"github.com/anywaye/press/internal/builds"
+	"github.com/anywaye/press/internal/config"
+	"github.com/anywaye/press/internal/ingest"
+	"github.com/anywaye/press/internal/platform/db"
+	"github.com/anywaye/press/internal/queue"
+	"github.com/anywaye/press/internal/store"
+	"github.com/anywaye/press/internal/verify"
 )
 
 // introspectionAdapter joins the gate's introspector to the chain's interface:
@@ -74,7 +74,7 @@ func run() error {
 	// identity's introspection route — the same route the notes gate lives
 	// on. A caller holds whichever credential their login minted, and both
 	// name the tenant.
-	jwks, err := auth.NewJWKSVerifierFor(cfg.JWKSURL, "https://auth.cafaye.com", "press")
+	jwks, err := auth.NewJWKSVerifierFor(cfg.JWKSURL, "https://auth.anywaye.com", "press")
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func run() error {
 
 	// The services. The build worker is not wired in this commit: the
 	// lifecycle and its record are in place, and the sandbox that runs
-	// cafaye/docs's build is the next packet — a stated gap, not an
+	// anywaye/docs's build is the next packet — a stated gap, not an
 	// implied one.
 	receipts := ingest.NewPostgresReceipts(pool)
 	// The queue: the ingest's receipt and the build it exists to feed.

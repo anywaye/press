@@ -81,7 +81,7 @@ func TestGitEngineChecksOutThePinnedRefDetached(t *testing.T) {
 	// The engine arrives at exactly the ref named — detached, so the build
 	// cannot drift — and an unpinned checkout is refused rather than guessed.
 	rec := &recordRun{}
-	e := &GitEngine{repo: "https://example.com/cafaye/docs", scratch: os.MkdirTemp, run: rec.run}
+	e := &GitEngine{repo: "https://example.com/anywaye/docs", scratch: os.MkdirTemp, run: rec.run}
 
 	dir, err := e.Checkout(context.Background(), "press-engine-v1")
 	if err != nil {
@@ -92,7 +92,7 @@ func TestGitEngineChecksOutThePinnedRefDetached(t *testing.T) {
 	if len(rec.calls) != 2 {
 		t.Fatalf("ran %d commands, want clone + checkout: %v", len(rec.calls), rec.calls)
 	}
-	if rec.calls[0][1] != "git" || !strings.Contains(rec.calls[0][2], "clone https://example.com/cafaye/docs") {
+	if rec.calls[0][1] != "git" || !strings.Contains(rec.calls[0][2], "clone https://example.com/anywaye/docs") {
 		t.Errorf("first command = %v, want the clone", rec.calls[0])
 	}
 	if rec.calls[1] != [3]string{dir, "git", "checkout --detach press-engine-v1"} {

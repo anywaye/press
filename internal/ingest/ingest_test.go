@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cafaye/press/internal/auth"
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/auth"
+	"github.com/anywaye/press/internal/store"
 )
 
 // These are behavior tests: each one names a thing press must do (or must

@@ -1,8 +1,8 @@
 # tenancy.yml — what press declares about its own account boundary.
 #
-# Checked by cafaye/core's contract harness:
+# Checked by anywaye/core's contract harness:
 #
-#     bash /Users/kaka/Code/any/cafaye/core/harness/bin/tenancy-check .
+#     bash /Users/kaka/Code/any/anywaye/core/harness/bin/tenancy-check .
 #
 # It must report 0 failures. The two warnings it reports are named at the
 # bottom, with why each is the honest residue of a SQL scanner reading a Go
@@ -146,7 +146,7 @@ rls:
   # Recommendation, deliberately left visible rather than acted on: adopting
   # kit's substrate for these two tables is NOT a mechanical adoption. The
   # substrate hardcodes `account_id` (kit templates/database/tenancy/
-  # substrate.sql:805) and `cafaye.protect_table` raises `undefined_column`
+  # substrate.sql:805) and `anywaye.protect_table` raises `undefined_column`
   # for a table without that column (:820-826), so press would either rename
   # its column — a migration and a storage change, out of this packet's
   # scope — or hand-write the policies against `tenant_id` and name the

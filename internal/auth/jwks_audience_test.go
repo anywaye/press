@@ -39,7 +39,7 @@ func TestJWKSVerifierAdmitsItsAudienceAndRefusesAnother(t *testing.T) {
 
 	mint := func(audience string) string {
 		tok, err := jwt.Signed(signer).Claims(map[string]any{
-			"iss":        "https://auth.cafaye.com",
+			"iss":        "https://auth.anywaye.com",
 			"aud":        audience,
 			"sub":        "user-1",
 			"account_id": "acct-1",
@@ -51,7 +51,7 @@ func TestJWKSVerifierAdmitsItsAudienceAndRefusesAnother(t *testing.T) {
 		return tok
 	}
 
-	v, err := NewJWKSVerifierFor(srv.URL, "https://auth.cafaye.com", "press")
+	v, err := NewJWKSVerifierFor(srv.URL, "https://auth.anywaye.com", "press")
 	if err != nil {
 		t.Fatalf("verifier: %v", err)
 	}

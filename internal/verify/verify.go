@@ -35,7 +35,7 @@ type Introspection struct {
 }
 
 // HTTPIntrospector calls identity's introspection route. The URL is identity's
-// issuer (https://auth.cafaye.com), and the route is the one identity mounts
+// issuer (https://auth.anywaye.com), and the route is the one identity mounts
 // for exactly this question: "what does this token claim".
 type HTTPIntrospector struct {
 	identityURL string

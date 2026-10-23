@@ -25,7 +25,7 @@ type GitEngine struct {
 }
 
 // NewGitEngine builds the production engine checkout against repo, the git
-// URL (or local path) of cafaye/docs.
+// URL (or local path) of anywaye/docs.
 func NewGitEngine(repo string) *GitEngine {
 	return &GitEngine{repo: repo, scratch: os.MkdirTemp, run: runCommand}
 }

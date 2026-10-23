@@ -1,11 +1,11 @@
 # press
 
-**Current direction (2026-10-19):** Ship is the product. The cafaye stack is internal infrastructure; we are not selling or supporting it as a standalone product as of this date. We continue to develop and improve it, treating the founder as the primary customer and keeping "build once, run everywhere" true, with the expectation that it may be offered again later.
+**Current direction (2026-10-19):** Ship is the product. The anywaye stack is internal infrastructure; we are not selling or supporting it as a standalone product as of this date. We continue to develop and improve it, treating the founder as the primary customer and keeping "build once, run everywhere" true, with the expectation that it may be offered again later.
 
-The cafaye documentation service. **`cafe docs publish` sends it a tarball;
+The anywaye documentation service. **`cafe docs publish` sends it a tarball;
 press files the tarball, records the ingest, and enqueues the build whose
 artifacts nginx serves.** BSL 1.1 (`Change License: Apache-2.0`, four years
-out): anyone can self-host it, only cafaye runs it as a service.
+out): anyone can self-host it, only anywaye runs it as a service.
 
 **Status: the ingest path, the build worker, the orchestration spine, and the
 gate are in the tree; the deployment is not.** What exists: the ingest path
@@ -17,7 +17,7 @@ build's own prefix — the goose runner (`internal/migrate`, `bin/migrate`,
 `cmd/press-migrate`), the claim loop (concurrency-safe claim in
 `internal/builds/store.go`, the poll loop in `internal/builds/claim.go`,
 the runnable `cmd/press-claim`), and `cmd/press-gate`, which is deployed and
-live in front of docs.cafaye.com/notes. What is honestly still missing: the
+live in front of docs.anywaye.com/notes. What is honestly still missing: the
 deployment — every serving binary exists but none runs on Contabo yet:
 `cmd/press` serves the ingest API on `:8080` (`r.Mount("/v1/ingest",
 ingestSvc.Handler())`), and `cmd/press-claim` and `cmd/press-migrate` are
@@ -51,14 +51,14 @@ it; the fleet-wide claim and the by-id reads deliberately do not, and
 | `migrations/` | goose SQL: `ingest_receipts`, `builds` |
 | `cmd/press-migrate` | the deploy step: apply `migrations/` to `DATABASE_URL` and exit; what the substrate's one-shot migrate Job runs |
 | `cmd/press-claim` | the orchestration poller: claim queued builds, run each through the worker to a terminal state; exits only on SIGTERM |
-| `cmd/press-gate` | the notes site's door: nginx `auth_request` subrequests `/verify`; live in front of docs.cafaye.com/notes |
+| `cmd/press-gate` | the notes site's door: nginx `auth_request` subrequests `/verify`; live in front of docs.anywaye.com/notes |
 | `bin/migrate` | the developer-facing entrypoint to the migrate package |
 
 ## Self-hosting
 
 What you need: Go 1.26, a Postgres with a database for press, an R2/S3
 bucket, and identity's JWKS URL (defaults to
-`https://auth.cafaye.com/.well-known/jwks.json` via `PRESS_JWKS_URL`).
+`https://auth.anywaye.com/.well-known/jwks.json` via `PRESS_JWKS_URL`).
 Migrate first — the schema is a deploy step, not boot logic:
 
 ```sh
@@ -75,8 +75,8 @@ is refused), the object store (`PRESS_R2_ENDPOINT`, `PRESS_R2_BUCKET`,
 `PRESS_POLL_INTERVAL` (default 5s). `press-gate` needs `PRESS_IDENTITY_URL`
 and `PRESS_NOTES_ACCOUNTS` (comma-separated; empty means a closed door),
 listening on `PRESS_GATE_ADDR` (default `:8081`); wire your frontend's
-`auth_request` at its `/verify` endpoint the way cafaye/loom
-`deploy/docs.cafaye.com.yaml` wires nginx.
+`auth_request` at its `/verify` endpoint the way anywaye/loom
+`deploy/docs.anywaye.com.yaml` wires nginx.
 
 What you get, honestly: the migrate/claim/gate binaries run; the gate doors
 a private site behind an allowlist. The ingest HTTP surface exists
@@ -107,9 +107,9 @@ and size are the exact bytes sent; the lifecycle refuses backward moves.
 ## The gate (cmd/press-gate)
 
 The private notes site's door, **deployed and live** in front of
-docs.cafaye.com/notes: it runs on the Contabo k3s cluster, where nginx's
+docs.anywaye.com/notes: it runs on the Contabo k3s cluster, where nginx's
 `auth_request` subrequests its `/verify` endpoint before serving any notes
-request (manifest: cafaye/loom `deploy/docs.cafaye.com.yaml`).
+request (manifest: anywaye/loom `deploy/docs.anywaye.com.yaml`).
 It resolves the caller through identity's introspection route and admits only
 `PRESS_NOTES_ACCOUNTS` — today the operator account that owns the notes;
 press's tenant model is where per-org gating arrives. Failures are closed: an

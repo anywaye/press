@@ -47,7 +47,7 @@ type Config struct {
 type Store struct {
 	// Endpoint is the S3 API origin, e.g.
 	// https://<account>.r2.cloudflarestorage.com. Empty means the AWS
-	// default, which is not where cafaye's objects live.
+	// default, which is not where anywaye's objects live.
 	Endpoint string
 	// Bucket is the artifact bucket. Every press object lives under it,
 	// tenant-scoped by key.
@@ -78,8 +78,8 @@ func Load() (Config, error) {
 		return c, fmt.Errorf("DATABASE_URL is required: press records every ingest in the press database on the one cluster")
 	}
 
-	c.JWKSURL = envOr("PRESS_JWKS_URL", "https://auth.cafaye.com/.well-known/jwks.json")
-	c.IdentityURL = envOr("PRESS_IDENTITY_URL", "https://auth.cafaye.com")
+	c.JWKSURL = envOr("PRESS_JWKS_URL", "https://auth.anywaye.com/.well-known/jwks.json")
+	c.IdentityURL = envOr("PRESS_IDENTITY_URL", "https://auth.anywaye.com")
 
 	c.MaxIngestBytes = DefaultMaxIngestBytes
 	if v := os.Getenv("PRESS_MAX_INGEST_BYTES"); v != "" {
@@ -113,7 +113,7 @@ func Load() (Config, error) {
 	// what refuses traffic when storage is misconfigured. A boot that fails
 	// on a missing bucket is a boot that cannot report *why* it is broken.
 	if c.Store.Bucket == "" {
-		c.Store.Bucket = "cafaye-docs-artifacts"
+		c.Store.Bucket = "anywaye-docs-artifacts"
 	}
 
 	return c, nil

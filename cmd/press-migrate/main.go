@@ -10,8 +10,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/cafaye/press/internal/migrate"
-	"github.com/cafaye/press/migrations"
+	"github.com/anywaye/press/internal/migrate"
+	"github.com/anywaye/press/migrations"
 )
 
 func main() {

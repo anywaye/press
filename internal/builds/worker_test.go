@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/store"
 )
 
 // Behavior tests for the worker: each one names a thing the worker must do,

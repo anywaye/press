@@ -24,8 +24,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cafaye/press/internal/auth"
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/auth"
+	"github.com/anywaye/press/internal/store"
 )
 
 // Receipt is what a successful ingest returns and what the receipt table

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cafaye/press/internal/store"
+	"github.com/anywaye/press/internal/store"
 )
 
 func TestNewBuildFixesItsArtifactPrefixAtCreation(t *testing.T) {
