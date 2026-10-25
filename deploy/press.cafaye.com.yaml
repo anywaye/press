@@ -44,6 +44,12 @@ spec:
           env:
             - name: PRESS_JWKS_URL
               value: "https://auth.anywaye.com/.well-known/jwks.json"
+            - name: PRESS_ERROR_REPORTING_DSN
+              value: "http://c5342cbf-5a88-464e-9576-cc8b40d0730b@glitchtip.default:8095/1"
+            - name: DEPLOYMENT_ENVIRONMENT
+              value: "production"
+            - name: PRESS_RELEASE
+              value: "errors-e2e"
           readinessProbe:
             httpGet:
               path: /readyz
