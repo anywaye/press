@@ -23,6 +23,7 @@ import (
 	"github.com/anywaye/press/internal/auth"
 	"github.com/anywaye/press/internal/builds"
 	"github.com/anywaye/press/internal/config"
+	"github.com/anywaye/press/internal/errorreporting"
 	"github.com/anywaye/press/internal/ingest"
 	"github.com/anywaye/press/internal/platform/db"
 	"github.com/anywaye/press/internal/queue"
@@ -59,6 +60,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	errorreporting.Init()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -121,7 +124,8 @@ func run() error {
 	})
 	r.Mount("/v1/ingest", ingestSvc.Handler())
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: r}
+	handler := errorreporting.RecoverMiddleware(r)
+	srv := &http.Server{Addr: cfg.Addr, Handler: handler}
 
 	errCh := make(chan error, 1)
 	go func() {
