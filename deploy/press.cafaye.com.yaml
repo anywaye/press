@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: press
-          image: ghcr.io/anywaye/press:latest
+          image: ghcr.io/anywaye/press@sha256:1d861bf7cdfb64e3eed2c730ea747dcf4c260f004b44f1a1a080d04b4b62d2df
           ports:
             - containerPort: 8080
           envFrom:
@@ -86,7 +86,7 @@ spec:
     spec:
       containers:
         - name: press-claim
-          image: ghcr.io/anywaye/press-claim:latest
+          image: ghcr.io/anywaye/press-claim@sha256:fc03b9708d767e8648dae3638896171af133adb85afa28cb644a2e02a883f55c
           envFrom:
             - secretRef:
                 name: press-db
