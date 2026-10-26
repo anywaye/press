@@ -26,7 +26,9 @@ import (
 	"github.com/anywaye/press/internal/builds"
 	"github.com/anywaye/press/internal/config"
 	"github.com/anywaye/press/internal/errorreporting"
+	"github.com/anywaye/press/internal/httpapi"
 	"github.com/anywaye/press/internal/ingest"
+	"github.com/anywaye/press/internal/telemetry"
 	"github.com/anywaye/press/internal/platform/db"
 	"github.com/anywaye/press/internal/queue"
 	"github.com/anywaye/press/internal/store"
@@ -102,7 +104,30 @@ func run() error {
 	buildStore := builds.NewPostgresBuilds(pool)
 	ingestSvc := ingest.NewService(verifier, r2, receipts, queue.Production(buildStore.Insert), cfg.MaxIngestBytes)
 
+	var flush telemetry.Shutdown
+	flush, err = telemetry.Install(ctx, telemetry.Options{
+		Endpoint:  telemetry.Endpoint(),
+		Disabled:  !telemetry.Enabled(),
+		LookupEnv: os.Getenv,
+	})
+	if err != nil {
+		slog.Error("telemetry install failed", "error", err)
+	} else {
+		defer func() {
+			flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := flush(flushCtx); err != nil {
+				slog.Error("telemetry flush failed", "error", err)
+			}
+		}()
+	}
+	if reason := telemetry.NoOpReason(); reason != "" {
+		slog.Info("telemetry is off", "reason", reason)
+	}
+
 	r := chi.NewRouter()
+	r.Use(httpapi.TelemetryMiddleware)
+
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
