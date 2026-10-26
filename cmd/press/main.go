@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -28,10 +29,10 @@ import (
 	"github.com/anywaye/press/internal/errorreporting"
 	"github.com/anywaye/press/internal/httpapi"
 	"github.com/anywaye/press/internal/ingest"
-	"github.com/anywaye/press/internal/telemetry"
 	"github.com/anywaye/press/internal/platform/db"
 	"github.com/anywaye/press/internal/queue"
 	"github.com/anywaye/press/internal/store"
+	"github.com/anywaye/press/internal/telemetry"
 	"github.com/anywaye/press/internal/verify"
 )
 
@@ -128,7 +129,13 @@ func run() error {
 	r := chi.NewRouter()
 	r.Use(httpapi.TelemetryMiddleware)
 
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Trace-Id") == "glitchtip-probe" {
+			errorreporting.CaptureError(fmt.Errorf("glitchtip probe press"), r)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("probe"))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
