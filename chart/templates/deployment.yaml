@@ -60,7 +60,9 @@ spec:
               protocol: TCP
           envFrom:
             - secretRef:
-                name: {{ .Values.secretName }}
+                name: press-db
+            - secretRef:
+                name: press-store
           env:
             {{- range $name, $value := .Values.env }}
             - name: {{ $name }}
