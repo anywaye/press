@@ -13,6 +13,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"os"
 	"os/signal"
 	"syscall"
@@ -108,6 +110,7 @@ func run() error {
 	// Readiness is the database's: press with an unreachable cluster can
 	// answer health and cannot file a receipt, and the substrate has to
 	// hear the difference.
+	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 	r.Get("/readyz", func(w http.ResponseWriter, req *http.Request) {
 		ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
 		defer cancel()
