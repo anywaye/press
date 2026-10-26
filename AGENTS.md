@@ -1,7 +1,7 @@
 # press — the documentation service
 
 One binary, no other runtime dependency. It receives documentation tarballs
-from `cafe docs publish`, verifies the caller against identity, records the
+from `any docs publish`, verifies the caller against identity, records the
 ingest, and enqueues the build whose artifacts nginx serves from R2 under the
 caller's tenant prefix.
 
@@ -50,4 +50,4 @@ prefix. Every failure lands the record on `failed` with its reason.
   database and its role owns nothing else.
 
 ## Secrets
-- No `.env` files with values. Use `cafe secret set/get/list` (dev) and `cafe dev` (injects). See `docs/secrets.md`.
+- No `.env` files with values. Use `any secret set/get/list` (dev) and `any dev` (injects). See `docs/secrets.md`.

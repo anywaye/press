@@ -2,6 +2,7 @@ package errorreporting
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -26,7 +27,7 @@ func Init() {
 	if environment == "" {
 		environment = "production"
 	}
-	_ = sentry.Init(sentry.ClientOptions{
+	err := sentry.Init(sentry.ClientOptions{
 		Dsn:              dsn,
 		Release:          release,
 		Environment:      environment,
@@ -42,6 +43,9 @@ func Init() {
 			return event
 		},
 	})
+	if err != nil {
+		log.Printf("error reporting init failed: %v", err)
+	}
 }
 
 func CaptureError(err error, r *http.Request) {
@@ -55,7 +59,9 @@ func CaptureError(err error, r *http.Request) {
 		})
 	}
 	hub.CaptureException(err)
-	sentry.Flush(2 * time.Second)
+	if !sentry.Flush(2 * time.Second) {
+		log.Printf("error reporting flush timed out")
+	}
 }
 
 func ErrorReportingEnabled() bool {

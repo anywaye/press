@@ -53,7 +53,7 @@ image:
   # is REFUSED by the template rather than rendered — see
   # templates/deployment.yaml, and kit's step, which refuses it at the
   # write.
-  digest: "sha256:ed758e2e037303535552bb15d0017aec9b61c54f2c831e581f26ab3c485c5972"
+  digest: "sha256:315a7a41ac85a24f4c0f3b592556bd6d4e21f2ef160a26934a7e83e0eb589f55"
   pullPolicy: IfNotPresent
 
 # The read-only pull secret on the box, created once, out of band:
@@ -182,7 +182,7 @@ ingress:
 # wired) are left to the secret if a deployment wants to set them.
 env:
   PRESS_HTTP_ADDR: ":8080"
-  PRESS_ERROR_REPORTING_DSN: "http://da15bbe5-6b70-4b2f-92a5-ce8a8365fecf@glitchtip.default:8095/2"
+  PRESS_ERROR_REPORTING_DSN: "http://da15bbe5-6b70-4b2f-92a5-ce8a8365fecf@glitchtip.default.svc.cluster.local:8095/2"
   PRESS_RELEASE: "0.1.0"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy.observability:4318"
   OTEL_SERVICE_NAME: "press"
