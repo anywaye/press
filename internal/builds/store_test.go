@@ -1,11 +1,5 @@
 package builds
 
-// THE GATED TESTS HERE RUN AGAINST A REAL POSTGRES, IN A DATABASE OF THEIR
-// OWN — never against TEST_DATABASE_URL's database itself. What they assert —
-// that the claim round-trips through the real tables, and that two
-// simultaneous claims grant one build — needs the real lock manager; no fake
-// can hold a lock. Without TEST_DATABASE_URL every test here skips: the suite
-// must not depend on a database.
 
 import (
 	"context"
@@ -24,9 +18,6 @@ import (
 	"github.com/anywaye/press/migrations"
 )
 
-// openMigratedPool migrates a scratch database and returns a pool on it. The
-// migration is part of the setup, not the assertion: store tests assume the
-// schema the migrate package owns.
 func openMigratedPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
@@ -45,8 +36,6 @@ func openMigratedPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// seedReceiptAndBuild writes the two rows a claim joins: the receipt first,
-// because the build's foreign key points at it.
 func seedReceiptAndBuild(t *testing.T, pool *pgxpool.Pool, tenant, buildID string) {
 	t.Helper()
 	ctx := context.Background()
@@ -70,8 +59,6 @@ func seedReceiptAndBuild(t *testing.T, pool *pgxpool.Pool, tenant, buildID strin
 }
 
 func TestPostgresBuildsRoundTripsTheLifecycle(t *testing.T) {
-	// Insert, read back, walk forward — and the backward move is refused with
-	// the lifecycle error, through the real table.
 	pool := openMigratedPool(t)
 	ctx := context.Background()
 	recs := NewPostgresBuilds(pool)
@@ -101,11 +88,6 @@ func TestPostgresBuildsRoundTripsTheLifecycle(t *testing.T) {
 }
 
 func TestTwoSimultaneousClaimsGrantOneBuild(t *testing.T) {
-	// THE CONCURRENCY EVIDENCE. Two claims run at the same time against one
-	// queued build; exactly one of them takes it, and the row is running
-	// afterwards. The assertion is deterministic under every interleave:
-	// serial or overlapping, the single claim statement can only move
-	// queued → running once, and the loser finds no queued row.
 	pool := openMigratedPool(t)
 	ctx := context.Background()
 
@@ -155,7 +137,6 @@ func TestTwoSimultaneousClaimsGrantOneBuild(t *testing.T) {
 		t.Fatalf("%d of 2 simultaneous claims took the build, want exactly 1", found)
 	}
 
-	// The queue is now empty: a third claim is the idle no-op.
 	again, err := recs.Claim(ctx)
 	if err != nil {
 		t.Fatalf("third claim: %v", err)
@@ -164,7 +145,6 @@ func TestTwoSimultaneousClaimsGrantOneBuild(t *testing.T) {
 		t.Fatal("a third claim took a build that is already running")
 	}
 
-	// The row itself is running: the claim moved it, not just reported it.
 	var state string
 	if err := pool.QueryRow(ctx, `SELECT state FROM builds WHERE id = 'b1'`).Scan(&state); err != nil {
 		t.Fatalf("reading the claimed row: %v", err)

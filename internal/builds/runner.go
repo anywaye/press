@@ -19,8 +19,6 @@ import (
 // not run: a build that synced but never compiled is a failed build with the
 // compiler's reason, not a succeeded build with a stale dist.
 type SubprocessRunner struct {
-	// run is the exec seam, so tests assert the exact argv without a node
-	// toolchain. Production is exec.CommandContext in engineDir.
 	run func(ctx context.Context, dir, name string, args ...string) error
 }
 
@@ -34,9 +32,6 @@ func runCommand(ctx context.Context, dir, name string, args ...string) error {
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		// The tail, not the whole log: the build log lives in the process
-		// output, and the recorded reason is what a tenant reads. A failure
-		// with no output at all still names the command.
 		const tail = 4 << 10
 		if len(out) > tail {
 			out = out[len(out)-tail:]

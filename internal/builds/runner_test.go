@@ -9,16 +9,10 @@ import (
 	"testing"
 )
 
-// Behavior tests for the production collaborators behind the worker's
-// interfaces: the subprocess runner, the git engine checkout, and the tree
-// uploader. Each one asserts the exact external effect — the argv, the keys —
-// with the process boundary faked, so no node, no git remote, and no R2.
 
-// recordRun is the exec seam's fake: it records every invocation and can fail
-// a named step.
 type recordRun struct {
-	calls [][3]string // dir, name, argv joined
-	fail  string      // substring of the shell line that fails
+	calls [][3]string
+	fail  string
 }
 
 func (r *recordRun) run(_ context.Context, dir, name string, args ...string) error {
@@ -30,8 +24,6 @@ func (r *recordRun) run(_ context.Context, dir, name string, args ...string) err
 }
 
 func TestSubprocessRunnerRunsSyncThenTheTwoBuilds(t *testing.T) {
-	// The v1 contract with the engine: sync the tenant content first, then
-	// the public build, then the notes build — each in the engine directory.
 	rec := &recordRun{}
 	r := &SubprocessRunner{run: rec.run}
 
@@ -40,8 +32,6 @@ func TestSubprocessRunnerRunsSyncThenTheTwoBuilds(t *testing.T) {
 		t.Fatalf("build: %v", err)
 	}
 
-	// npm ci is first and non-negotiable: a fresh engine checkout has no
-	// node_modules, and the astro binary is not on PATH until it does.
 	want := [][3]string{
 		{"/engine", "npm", "ci"},
 		{"/engine", "node", "bin/sync-content --source " + content},
@@ -59,8 +49,6 @@ func TestSubprocessRunnerRunsSyncThenTheTwoBuilds(t *testing.T) {
 }
 
 func TestSubprocessRunnerStopsAtTheFirstFailureAndNamesIt(t *testing.T) {
-	// A build that synced but never compiled is a failed build, not half a
-	// site: the failure names the step, and the steps after it do not run.
 	rec := &recordRun{fail: "build:public"}
 	r := &SubprocessRunner{run: rec.run}
 
@@ -71,15 +59,12 @@ func TestSubprocessRunnerStopsAtTheFirstFailureAndNamesIt(t *testing.T) {
 	if !strings.Contains(err.Error(), "build:public") {
 		t.Fatalf("error = %v; want the failing step named", err)
 	}
-	// ci ran, sync ran, build:public failed, build:notes never did.
 	if len(rec.calls) != 3 {
 		t.Fatalf("ran %d steps after the failure, want the run to stop at 3 (ci, sync, build:public)", len(rec.calls))
 	}
 }
 
 func TestGitEngineChecksOutThePinnedRefDetached(t *testing.T) {
-	// The engine arrives at exactly the ref named — detached, so the build
-	// cannot drift — and an unpinned checkout is refused rather than guessed.
 	rec := &recordRun{}
 	e := &GitEngine{repo: "https://example.com/anywaye/docs", scratch: os.MkdirTemp, run: rec.run}
 
@@ -104,7 +89,6 @@ func TestGitEngineChecksOutThePinnedRefDetached(t *testing.T) {
 	}
 }
 
-// fakePutStore records every Put for the uploader test.
 type fakePutStore struct {
 	puts map[string][]byte
 	err  error
@@ -130,8 +114,6 @@ func (f *fakePutStore) Head(_ context.Context, _ string) (int64, error) {
 }
 
 func TestDirUploaderPutsEveryFileUnderThePrefix(t *testing.T) {
-	// The dist tree's layout is preserved under the build's prefix, and the
-	// prefix is a directory whether or not it arrived with its slash.
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
 		t.Fatal(err)
@@ -161,8 +143,6 @@ func TestDirUploaderPutsEveryFileUnderThePrefix(t *testing.T) {
 }
 
 func TestDirUploaderRefusesAnEmptyDist(t *testing.T) {
-	// A build that produced nothing failed; uploading nothing under its
-	// prefix would present as a succeeded site with no pages.
 	s := &fakePutStore{}
 	err := NewDirUploader(s).Upload(context.Background(), "tenants/acme/dist/docs/", t.TempDir())
 	if err == nil {

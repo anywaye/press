@@ -8,13 +8,7 @@ import (
 	"testing"
 )
 
-// The session token is what R2's temporary credentials carry, and it is a
-// SIGNED header: a pair without it signs cleanly and answers 403. These
-// tests pin the header's presence (and its absence when there is no token)
-// by driving a real request through a recording server.
 
-// capturedRequest is the one thing this file's tests assert on: the headers
-// the client actually signed.
 type capturedRequest struct {
 	authorization string
 	signedHeaders string
@@ -75,8 +69,6 @@ func TestSigningOmitsTheSessionTokenWhenThereIsNone(t *testing.T) {
 	}
 }
 
-// signedHeaderList pulls the SignedHeaders=… list out of an Authorization
-// header: "AWS4-HMAC-SHA256 Credential=…, SignedHeaders=a;b;c, Signature=…".
 func signedHeaderList(authorization string) string {
 	for _, part := range splitSemicolonField(authorization) {
 		part = strings.TrimSpace(part)
@@ -100,7 +92,6 @@ func splitSemicolonField(s string) []string {
 }
 
 func containsHeader(list, want string) bool {
-	// The SignedHeaders list itself is semicolon-separated.
 	for _, h := range strings.Split(list, ";") {
 		if h == want {
 			return true

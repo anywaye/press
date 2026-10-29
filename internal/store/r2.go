@@ -1,8 +1,3 @@
-// Package store's other half: the S3 client R2 speaks, written against the
-// stdlib on purpose. The AWS SDK is a megabyte of transitive dependencies to
-// make one PUT, and press's fleet discipline (see identity's go.mod) is that a
-// dependency is a decision about what the project carries. SigV4 is fifty
-// lines of hmac and a header, so it is written here once and owned.
 package store
 
 import (
@@ -32,13 +27,11 @@ type Client interface {
 // R2 talks to an R2 bucket over its S3 API. Zero value is not usable; build
 // with NewR2.
 type R2 struct {
-	endpoint string // https://<account>.r2.cloudflarestorage.com
+	endpoint string
 	bucket   string
 	region   string
 	keyID    string
 	secret   string
-	// sessionToken is the STS-style token R2's temporary credentials carry.
-	// It joins the signed header set, so it is set before sign() builds them.
 	sessionToken string
 	client       *http.Client
 }
@@ -145,14 +138,11 @@ func (r *R2) Head(ctx context.Context, key string) (int64, error) {
 // ErrNotFound is the one storage error the ingest path has to branch on.
 var ErrNotFound = fmt.Errorf("store: object not found")
 
-// sign applies AWS SigV4 for the s3 service. region "auto" is R2's.
 func (r *R2) sign(req *http.Request, payloadHash []byte, now time.Time) {
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
 	req.Header.Set("x-amz-date", amzDate)
 
-	// Canonical headers, sorted, lowercased names. host and the two
-	// x-amz headers are the signed set; R2 accepts the same set as S3.
 	host := req.URL.Host
 	req.Header.Set("host", host)
 
@@ -162,11 +152,6 @@ func (r *R2) sign(req *http.Request, payloadHash []byte, now time.Time) {
 		{"x-amz-content-sha256", req.Header.Get("x-amz-content-sha256")},
 		{"x-amz-date", amzDate},
 	}
-	// The session token is one of the signed headers — and it must also be
-	// SET on the request, not merely signed: a header in the signed set but
-	// absent from the wire is a signature over a header the server never
-	// sees. The first version of this code got that wrong and answered 403
-	// on a valid pair.
 	if r.sessionToken != "" {
 		req.Header.Set("x-amz-security-token", r.sessionToken)
 		headers = append(headers, hv{"x-amz-security-token", r.sessionToken})

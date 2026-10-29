@@ -33,7 +33,6 @@ func Init() {
 		Environment:      environment,
 		AttachStacktrace: true,
 		BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-			// Keep the exception message so errors are actionable.
 			if event.Request != nil {
 				if u := event.Request.URL; u != "" {
 					if i := strings.IndexByte(u, '?'); i >= 0 {

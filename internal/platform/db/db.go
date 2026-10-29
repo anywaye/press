@@ -1,8 +1,3 @@
-// Package db is press's half of the fleet's one-Postgres convention: one
-// connection pool to the press database on the shared cluster, and nothing
-// that reaches another service's database. The boundary is the database —
-// identity, billing, courier and press each own one — and the role press
-// connects as owns only this one.
 package db
 
 import (
@@ -21,9 +16,6 @@ func Open(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db: DATABASE_URL does not parse: %w", err)
 	}
-	// The stated budget from architecture/one-cluster: small and fixed,
-	// because the cluster is shared and an unbounded pool is one service
-	// taking the others' connections.
 	cfg.MaxConns = 8
 	cfg.MinConns = 1
 	cfg.MaxConnLifetime = time.Hour

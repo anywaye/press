@@ -14,10 +14,6 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 )
 
-// The audience claim is what makes identity's exchange a delegation to ONE
-// service: a token minted for billing is not a token for press. These tests
-// sign real tokens with a real key and serve the real JWKS shape, so the
-// verification path under test is the shipped one.
 
 func TestJWKSVerifierAdmitsItsAudienceAndRefusesAnother(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

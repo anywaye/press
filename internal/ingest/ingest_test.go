@@ -15,12 +15,7 @@ import (
 	"github.com/anywaye/press/internal/store"
 )
 
-// These are behavior tests: each one names a thing press must do (or must
-// refuse to do) and drives the whole path — verifier to store to receipts —
-// with fakes. No framework is exercised; the service's collaborators are the
-// interfaces the service itself declares.
 
-// fakeVerifier answers Verify from a table, so a test can be the tenant.
 type fakeVerifier struct {
 	claims auth.Claims
 	err    error
@@ -30,7 +25,6 @@ func (f fakeVerifier) Verify(context.Context, string) (auth.Claims, error) {
 	return f.claims, f.err
 }
 
-// fakeStore records every Put and can fail the next one.
 type fakeStore struct {
 	puts  map[string][]byte
 	fail  error
@@ -60,7 +54,6 @@ func (f *fakeStore) Head(_ context.Context, key string) (int64, error) {
 	return 0, store.ErrNotFound
 }
 
-// fakeReceipts records receipts and can refuse a specific id.
 type fakeReceipts struct {
 	rows    []Receipt
 	err     error
@@ -80,7 +73,6 @@ func (f *fakeReceipts) Insert(_ context.Context, r Receipt) error {
 	return nil
 }
 
-// fakeQueue records what an ingest enqueued.
 type fakeQueue struct {
 	enqueued []Receipt
 	err      error
@@ -94,14 +86,11 @@ func (f *fakeQueue) Enqueue(_ context.Context, r Receipt) error {
 	return nil
 }
 
-// newService builds an ingest service with a stubbed verifier for tenant.
 func newService(t *testing.T, tenant string, s store.Client, receipts Receipts, maxBytes int64) *Service {
 	t.Helper()
 	return NewService(fakeVerifier{claims: auth.Claims{AccountID: tenant, Subject: "user-1"}}, s, receipts, &fakeQueue{}, maxBytes)
 }
 
-// multipartBody builds the form press documents: content plus kind, project,
-// version fields.
 func multipartBody(t *testing.T, kind, project, version string, content []byte) (*bytes.Buffer, string) {
 	t.Helper()
 	var buf bytes.Buffer
@@ -161,9 +150,6 @@ func TestIngestWritesUnderTheCallersOwnTenantPrefixAndNothingElse(t *testing.T) 
 }
 
 func TestIngestRefusesAProjectNameThatCouldEscapeItsPrefix(t *testing.T) {
-	// The form has no tenant field, so the escape route is a project name
-	// with traversal in it — a pantry ingest whose project is "../other".
-	// press must refuse it before the key is built, and write nothing.
 	for _, bad := range []string{"../other", "a/b", "..", "CANON"} {
 		s := newFakeStore()
 		svc := newService(t, "beta-org", s, &fakeReceipts{}, 1<<20)
@@ -181,7 +167,7 @@ func TestIngestRefusesAProjectNameThatCouldEscapeItsPrefix(t *testing.T) {
 func TestIngestRefusesAnOverCapTarballBeforeWritingAnything(t *testing.T) {
 	s := newFakeStore()
 	receipts := &fakeReceipts{}
-	svc := newService(t, "beta-org", s, receipts, 8) // eight bytes
+	svc := newService(t, "beta-org", s, receipts, 8)
 
 	_, status, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("nine bytes!"))
 	if err == nil {
@@ -233,8 +219,6 @@ func TestIngestRecordsTheDigestAndSizeOfTheExactBytesSent(t *testing.T) {
 }
 
 func TestIngestGeneratesItsOwnReceiptId(t *testing.T) {
-	// The receipt id is the object's identity and part of its key; a caller
-	// that chose it could collide with another tenant's receipt id.
 	s := newFakeStore()
 	svc := newService(t, "beta-org", s, &fakeReceipts{}, 1<<20)
 	seen := map[string]bool{}
@@ -254,10 +238,6 @@ func TestIngestGeneratesItsOwnReceiptId(t *testing.T) {
 }
 
 func TestIngestWhenTheReceiptTableRefusesLeavesAnOrphanItSaysSo(t *testing.T) {
-	// The documented failure order: the object is written, then recorded. A
-	// refusal at record time means the object exists with no receipt, and
-	// the reconciliation run exists to sweep those. What press must not do
-	// is answer 201 hiding a receipt that was never written.
 	s := newFakeStore()
 	svc := newService(t, "beta-org", s, &fakeReceipts{failAll: true, err: errors.New("db down")}, 1<<20)
 	_, status, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("x"))
@@ -270,11 +250,6 @@ func TestIngestWhenTheReceiptTableRefusesLeavesAnOrphanItSaysSo(t *testing.T) {
 }
 
 func TestParseRequestRejectsAFormThatNamesATenantField(t *testing.T) {
-	// The one hostile form press must notice by shape: a caller sending the
-	// tenant in the body. There is no such field, so the request is refused
-	// rather than silently ignored — a client that thinks it sets the tenant
-	// is a client misunderstanding the whole boundary, and silence would let
-	// it ship.
 	buf, contentType := multipartBody(t, string(store.KindDocs), "", "", []byte("x"))
 	buf2, _ := multipartBodyWithTenant(t, contentType, []byte("x"))
 
@@ -292,13 +267,6 @@ func TestParseRequestRejectsAFormThatNamesATenantField(t *testing.T) {
 }
 
 func TestIngestHandlerRefusesAFormThatNamesAnotherTenantAndWritesNothing(t *testing.T) {
-	// The other-account arm of the ingest route, driven through the real
-	// handler: the credential is VALID and belongs to beta-org, and the body
-	// claims a different tenant. The refusal happens before anything is
-	// written — no object under either prefix, no receipt row — which is the
-	// zero this arm is about. The same caller's well-formed request is the
-	// own-account arm
-	// (TestIngestWritesUnderTheCallersOwnTenantPrefixAndNothingElse).
 	s := newFakeStore()
 	receipts := &fakeReceipts{}
 	svc := newService(t, "beta-org", s, receipts, 1<<20)
@@ -322,8 +290,6 @@ func TestIngestHandlerRefusesAFormThatNamesAnotherTenantAndWritesNothing(t *test
 	}
 }
 
-// multipartBodyWithTenant is the same form with an extra field no press
-// endpoint documents.
 func multipartBodyWithTenant(t *testing.T, contentType string, content []byte) (*bytes.Buffer, string) {
 	t.Helper()
 	var buf bytes.Buffer
@@ -344,10 +310,6 @@ func multipartBodyWithTenant(t *testing.T, contentType string, content []byte) (
 }
 
 func TestIngestEnqueuesTheBuildForItsReceipt(t *testing.T) {
-	// A receipt without a build is a promise nothing keeps: the caller saw
-	// 201 and no one is building their content. The enqueue carries the
-	// receipt's own tenant and kind — the values the artifact prefix is
-	// derived from.
 	s := newFakeStore()
 	receipts := &fakeReceipts{}
 	q := &fakeQueue{}
@@ -368,10 +330,6 @@ func TestIngestEnqueuesTheBuildForItsReceipt(t *testing.T) {
 }
 
 func TestIngestReportsWhenTheBuildDoesNotEnqueue(t *testing.T) {
-	// The receipt is a row the caller can act on; the missing build is the
-	// difference between "your content arrived" and "your content is being
-	// built". A 500 with the reason keeps the caller's retry able to
-	// produce one.
 	s := newFakeStore()
 	q := &fakeQueue{err: errors.New("db down")}
 	svc := NewService(fakeVerifier{claims: auth.Claims{AccountID: "beta-org"}}, s, &fakeReceipts{}, q, 1<<20)

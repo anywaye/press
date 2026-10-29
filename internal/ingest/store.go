@@ -14,8 +14,6 @@ type PostgresReceipts struct {
 	q pgxExecer
 }
 
-// pgxExecer is the pgx surface the receipts need, so tests can stand in for
-// the pool without a database.
 type pgxExecer interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }

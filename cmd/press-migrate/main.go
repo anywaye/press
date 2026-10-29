@@ -1,8 +1,3 @@
-// Command press-migrate is press's deploy step: it applies `migrations/` to
-// the database named by DATABASE_URL and exits. It is a separate binary from
-// the service on purpose — migrating is not serving, and a process that
-// starts, applies, and exits is what the substrate's one-shot migrate Job
-// runs. `bin/migrate` is the developer-facing entrypoint that reaches this.
 package main
 
 import (

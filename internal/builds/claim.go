@@ -1,17 +1,3 @@
-// The claim loop: the poll that turns a queued build into artifacts. One
-// process runs Claim, and the build it gets back is already running and
-// already its own — the loop's only remaining jobs are to run it through
-// the Worker and to keep polling until it is told to stop.
-//
-// # WHY THE LOOP NEVER EXITS ON A BUILD FAILURE
-//
-// A failed build is already recorded as failed with its reason by the time
-// Once returns the error; the queue behind it still holds other tenants'
-// builds. A loop that exited on the first failure would strand every build
-// queued after a broken one, turning one tenant's bad tarball into
-// everyone's outage. So Once reports the failure and Run keeps polling.
-// What stops the loop is the context — SIGTERM in the binary — and nothing
-// else.
 package builds
 
 import (
@@ -51,8 +37,6 @@ func (l *Loop) Once(ctx context.Context) (bool, error) {
 		"build", claimed.Build.ID, "tenant", claimed.Build.Tenant, "kind", claimed.Build.Kind)
 	state, err := l.Work.RunClaimed(ctx, claimed.Build, claimed.Receipt, l.EngineRef)
 	if err != nil {
-		// The row already says failed with this reason; the log line is
-		// for the operator watching the poll, not a second record.
 		l.log().Info("press-claim: build failed",
 			"build", claimed.Build.ID, "state", state, "error", err)
 		return true, err

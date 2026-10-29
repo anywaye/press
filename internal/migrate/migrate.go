@@ -1,28 +1,3 @@
-// Package migrate applies this repository's goose migrations from an embedded
-// copy of `migrations/`, inside a process that starts, applies, and exits —
-// never from the serving path. Migrating stays a deploy step: the substrate
-// runs a one-shot migrate Job before the service boots against the schema,
-// because a service that boots against an empty schema fails every query with
-// `relation does not exist` and says nothing about why.
-//
-// # WHY THE goose LIBRARY AND NOT A SECOND APPLIER
-//
-// `goose` is pinned at v3.28.0, the version the rest of the fleet uses. Linking
-// the library in at that same version means ONE migration engine describes the
-// schema on a developer's machine and on the box, and one version table
-// (`goose_db_version`) records where each database is. Writing a second
-// applier over pgx would inherit every bug a hand-rolled runner has — the
-// fleet already has the receipt for that class — so what this package owns is
-// the wiring (which DSN, which files, which log, which exit status) and
-// nothing about the annotations, the transaction per migration, or the
-// version table.
-//
-// # WHAT IT DOES NOT NEED
-//
-// The DSN comes from `DATABASE_URL` and nothing else. A migrate Job is handed
-// a database and nothing else, so requiring the service's other configuration
-// to apply a migration would make the Job fail for a reason that has nothing
-// to do with the schema.
 package migrate
 
 import (
@@ -38,10 +13,6 @@ import (
 
 	"github.com/pressly/goose/v3"
 
-	// The `database/sql` driver goose needs, and it is pgx — the Postgres
-	// library this service already depends on — rather than a second
-	// connection stack in the image. Imported for its side effect: it
-	// registers the "pgx" driver name `sql.Open` below asks for.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -87,16 +58,10 @@ func Run(ctx context.Context, dsn string, fsys fs.FS, logger *slog.Logger) ([]st
 	}
 	defer func() { _ = db.Close() }()
 
-	// sql.Open is lazy: connecting here means an unreachable database reports
-	// as a connect failure with this error, rather than as a nil dereference
-	// or a timeout inside goose's first query.
 	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("connecting to the database: %w", err)
 	}
 
-	// The provider rather than the package-level goose functions: goose's
-	// global API is process-wide mutable state, and this package has no reason
-	// to have any. One provider, built from the call's own arguments.
 	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithSlog(logger))
 	if err != nil {
 		return nil, fmt.Errorf("reading the migrations: %w", err)
@@ -104,9 +69,6 @@ func Run(ctx context.Context, dsn string, fsys fs.FS, logger *slog.Logger) ([]st
 
 	results, err := provider.Up(ctx)
 	if err != nil {
-		// `results` is nil on failure, deliberately: the applied set is what
-		// goose's own version table already records, and the useful sentence
-		// is which file stopped the run.
 		return nil, nameTheFailure(err)
 	}
 
@@ -119,15 +81,6 @@ func Run(ctx context.Context, dsn string, fsys fs.FS, logger *slog.Logger) ([]st
 	return applied, nil
 }
 
-// nameTheFailure makes sure the error a caller prints NAMES THE FILE that
-// failed, because that is the one fact a failed deploy needs and the one
-// goose's own message does not carry: `PartialError.Error` reports a version
-// number, and "version 1 failed" is a bisect where "00001_press.sql failed"
-// is the file to open.
-//
-// A failure that is not a PartialError — the version table could not be read,
-// the database went away mid-run — is returned unchanged: it has no file to
-// name, and inventing one would be worse than saying nothing.
 func nameTheFailure(err error) error {
 	var partial *goose.PartialError
 	if !errors.As(err, &partial) || partial.Failed == nil || partial.Failed.Source == nil {

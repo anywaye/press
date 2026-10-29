@@ -1,9 +1,3 @@
-// Package auth is press's trust boundary: a caller is who identity says they
-// are, and nothing else. The producer side is identity's JWKS endpoint; this
-// package is the verifying half, and it verifies exactly one thing — that the
-// bearer token was minted by identity, is unexpired, and names an account —
-// because that is everything press's authorization needs: the tenant IS the
-// account.
 package auth
 
 import (
@@ -21,11 +15,7 @@ import (
 // Claims are the fields press reads off a verified token. Everything else the
 // token carries is none of press's business.
 type Claims struct {
-	// AccountID is the tenant. It is the ONLY source of a tenant in press:
-	// no request body, no header, no query parameter can name one.
 	AccountID string
-	// Subject is the identity's user id, recorded on the receipt so an
-	// ingest is auditable to a human without a join.
 	Subject string
 }
 
@@ -44,11 +34,6 @@ type Verifier interface {
 type JWKSVerifier struct {
 	url    string
 	issuer string
-	// audience is the one audience this verifier admits. Identity's
-	// session-to-token exchange mints tokens per audience on purpose — a
-	// token minted for billing names billing — and a verifier that skipped
-	// the claim would accept a token minted for any other service, which is
-	// a delegation that widens silently.
 	audience string
 	fetch    func(ctx context.Context, url string) (*jose.JSONWebKeySet, error)
 	mu       sync.Mutex
@@ -94,8 +79,6 @@ func (v *JWKSVerifier) Verify(ctx context.Context, token string) (Claims, error)
 		return Claims{}, fmt.Errorf("auth: cannot read identity's key set: %w", err)
 	}
 
-	// The kid selects the key; a token whose kid is not in the set is
-	// refused rather than tried against every key.
 	header := tok.Signatures[0].Header
 	var key *jose.JSONWebKey
 	for i := range keys.Keys {
@@ -127,15 +110,11 @@ func (v *JWKSVerifier) Verify(ctx context.Context, token string) (Claims, error)
 		return Claims{}, fmt.Errorf("auth: token issuer is %q, expected %q", raw.Issuer, v.issuer)
 	}
 	if v.audience != "" && raw.Audience != v.audience {
-		// A token minted for another service is not a token for this one.
-		// The exchange mints one audience per token precisely so this check
-		// has something to check.
 		return Claims{}, fmt.Errorf("auth: token audience is %q, expected %q", raw.Audience, v.audience)
 	}
 	if raw.Expiry <= time.Now().Unix() {
 		return Claims{}, fmt.Errorf("auth: token expired")
 	}
-	// A token without an account names no tenant, so it authors nothing.
 	if raw.AccountID == "" {
 		return Claims{}, fmt.Errorf("auth: token carries no account_id")
 	}

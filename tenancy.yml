@@ -1,109 +1,13 @@
-# tenancy.yml — what press declares about its own account boundary.
-#
-# Checked by anywaye/core's contract harness:
-#
-#     bash /Users/kaka/Code/any/anywaye/core/harness/bin/tenancy-check .
-#
-# It must report 0 failures. The two warnings it reports are named at the
-# bottom, with why each is the honest residue of a SQL scanner reading a Go
-# service rather than something this file papers over.
-#
-# # THE BOUNDARY, ESTABLISHED FROM THE CODE
-#
-# press holds two tenant-scoped tables — `ingest_receipts` and `builds` — and
-# `tenant_id` is how both the migration (migrations/00001_press.sql:23 and
-# :43) and every SQL statement that mentions the key spell it. The Go
-# identifiers spell the same value `Tenant` (`Build.Tenant`,
-# `Receipt.Tenant`) and `claims.AccountID`, so the lines this declaration
-# names as `enforced` are SQL lines: `enforced.line` must carry the declared
-# key, and the Go lines that resolve the account do not.
-#
-# # THE VALUE'S ONE ORIGIN: THE VERIFIED TOKEN
-#
-# `internal/auth` verifies the bearer token — an RS256 JWT against identity's
-# JWKS with audience `press` (internal/auth/jwks.go), or an opaque session
-# token via identity's introspection route (internal/auth/chain.go) — and
-# returns `Claims.AccountID`, read off the verified payload
-# (internal/auth/jwks.go:120 is the claim name). `internal/ingest/ingest.go:140`
-# takes the tenant from exactly there. The ingest package has no field that
-# accepts a tenant from a caller: a form field named `tenant` is refused, not
-# ignored (internal/ingest/ingest.go:110), and the receipt id half of the
-# object key is minted server-side (internal/ingest/ingest.go:254).
-#
-# # EVERY STATEMENT, AND WHETHER IT CARRIES THE PREDICATE
-#
-# Six statements touch the two tables. The migration header's claim — "every
-# statement in this service filters by it" — is NOT true of half of them, and
-# this declaration says which. The measured inventory:
-#
-#   1. INSERT ingest_receipts            internal/ingest/store.go:31-40
-#      No predicate (an insert cannot reach another account's row; `insert`
-#      is deliberately absent from `operation` for the same reason).
-#      tenant_id is bound from r.Tenant (store.go:36), which is
-#      claims.AccountID (ingest.go:140).
-#   2. INSERT builds                     internal/builds/store.go:73-91
-#      No predicate, same reason. b.Tenant comes from the receipt the ingest
-#      recorded (internal/queue/queue.go:39).
-#   3. SELECT builds WHERE id = $1       internal/builds/store.go:94-111
-#      NO tenant predicate. Reached only from Transition (store.go:120) and
-#      from tests. The id is never taken from a request: the HTTP surface
-#      mounts one route, the ingest handler, and no handler exposes builds.
-#      Not declared as an entry point — there is no line here this format can
-#      honestly call `enforced`, because the statement has no scope to name.
-#   4. UPDATE builds ... WHERE id = $1 AND state = $3
-#                                        internal/builds/store.go:119-148
-#      NO tenant predicate. Same callers (internal/builds/worker.go:94,117,120);
-#      the state predicate is the concurrency guard, not the tenancy one.
-#   5. claim: SELECT builds WHERE state = 'queued', then UPDATE by id
-#                                        internal/builds/store.go:165-196
-#      NO tenant predicate BY DESIGN — the queue is fleet-wide and a tenant
-#      predicate would idle one tenant's lane behind another's. The row's own
-#      tenant is read back in the RETURNING (line 184) and governs
-#      everything downstream.
-#   6. SELECT ingest_receipts WHERE id = $1
-#                                        internal/builds/store.go:203-210
-#      NO tenant predicate. The receipt id comes from the claimed builds row,
-#      and the tenant read back is compared to the build's before anything
-#      leaves the worker: internal/builds/worker.go:127 is the line that
-#      actually draws this boundary, and it cannot be the `enforced.line`
-#      below because it spells the value `Tenant`, not `tenant_id`.
-#
-# Statements 3, 4 and 6 are the by-id shapes, and none of the three is
-# caller-reachable: no route takes a build id or a receipt id from a request.
-# They are not declared as entry points because this format declares where a
-# service SCOPES a statement, and naming a tenant_id-carrying line that is not
-# a predicate would be a declaration claiming a boundary the code does not
-# have. They are named here, in the file the contract reads, so the omission
-# is a sentence rather than a silence — which is the whole difference between
-# this file and the migration comment it corrects.
 version: 1
 service: press
 
 accountScoped: true
 
 scope:
-  # The column both tables carry, the key both indexes lead with
-  # (migrations/00001_press.sql:39 and :54), and the only spelling the
-  # checker can find: press's Go identifiers say `Tenant`, so the six SQL
-  # statements above are the whole key-bearing surface. Deliberately NOT
-  # renamed to `account_id`: that is a migration and a storage change, and
-  # this file declares the key the code uses today.
   key: tenant_id
-  # Where the scoping code lives: both stores, the worker and claim, the
-  # auth chain, and the migration. `cmd/` is not in this list on purpose: it
-  # is wiring and holds no query, and no line there carries the key.
   sources:
     - internal
     - migrations
-  # Every key-carrying line the checker's scanner reads in those sources that
-  # is NOT a predicate, with the reason. Measured by running the scanner
-  # itself (0 attributed statements, 8 unattributed sites): the key appears
-  # in column lists and index definitions, and never on a single line that
-  # opens a `select … from` the scanner can attribute. On this arm of the
-  # format the list does not excuse a failure — only `accountScoped: false`
-  # consults it — it is the vouched-for inventory, so a reader can see that
-  # "zero attributed statements" is a limit of the scanner and not an absence
-  # of key-carrying code.
   nonRowSites:
     - file: internal/ingest/store.go
       line: 33
@@ -131,55 +35,16 @@ scope:
       reason: the builds index definition — the key as the index prefix, same reading; DDL rather than a row predicate
 
 rls:
-  # The truth today, measured: migrations/00001_press.sql holds zero `create
-  # policy` lines, zero `alter table … row level security` lines and zero
-  # `force` lines (grep -ci). Postgres holds NO row-level boundary for
-  # press's two tables.
-  #
-  # The migration header's other half — "the database is the isolation
-  # boundary" — is a claim about the CLUSTER (one Postgres, one database per
-  # service, press's role owning press's database and reaching nothing else).
-  # That topology is a deployment fact this repository does not carry, and
-  # this file does not restate it as if it had been measured here. What is
-  # measured here is the negative: no policy, no enable, no force.
-  #
-  # Recommendation, deliberately left visible rather than acted on: adopting
-  # kit's substrate for these two tables is NOT a mechanical adoption. The
-  # substrate hardcodes `account_id` (kit templates/database/tenancy/
-  # substrate.sql:805) and `anywaye.protect_table` raises `undefined_column`
-  # for a table without that column (:820-826), so press would either rename
-  # its column — a migration and a storage change, out of this packet's
-  # scope — or hand-write the policies against `tenant_id` and name the
-  # fleet's key itself. And the claim loop is cross-tenant by construction:
-  # RLS on `builds` would need a system-identity design the substrate does
-  # not currently carry, or the claim role would have to bypass the policies,
-  # which is where the value would go. Neither half is decided here.
   databaseEnforced: false
   sources:
     - migrations
-  # Empty because it is empty; legal only because databaseEnforced is false.
-  # A `create policy` or a `force` line appearing in migrations without this
-  # block moving is `tenancy.rls-undeclared` — the red that makes the first
-  # migration arrive with a declaration instead of without one.
   tables: []
 
 entryPoints:
-  # ---------------------------------------------------------------- ingest
   - id: ingest-receipt
-    # `call`, not `select`/`update`/`delete`: this route reaches no existing
-    # row. It creates the caller's own receipt and build and writes the
-    # tarball under the caller's own prefix, so there is no another-account
-    # row it could return. Closure cannot be checked against a `call`, and
-    # the checker says so by name rather than counting it as covered.
     operation: call
     subject: ingest_receipts
     enforced:
-      # The line is the receipt INSERT's column list — the column the
-      # verified account is bound into. What it is NOT: a predicate. The
-      # value's origin is one hop up: r.Tenant (internal/ingest/store.go:36)
-      # is set from claims.AccountID (internal/ingest/ingest.go:140), a
-      # verified token claim. `repository-method` because the account is
-      # stamped by this repository method and there is nothing to filter.
       mechanism: repository-method
       file: internal/ingest/store.go
       line: 33
@@ -188,52 +53,24 @@ entryPoints:
       cases:
         - id: no-identity
           asserts: absent
-          # An unverified caller: the verifier refuses, the service answers
-          # 401 (asserted on the line above the one named here), and this
-          # arm's zero is the store's write count — no object, no row.
           expects: s.calls
           file: internal/ingest/ingest_test.go
           line: 208
         - id: other-account
           asserts: absent
-          # A VALID credential for beta-org and a body that names a different
-          # tenant (`tenant=someone-else`), driven through the real handler:
-          # refused with 400 before anything is written. This test was added
-          # by this packet — the arm had no service-level assertion before
-          # it — and it seeds the same zero-write evidence as the no-identity
-          # arm. Verified able to fail: with the tenant-field refusal removed
-          # it goes red on this exact line.
           expects: s.calls
           file: internal/ingest/ingest_test.go
           line: 314
         - id: own-account
           asserts: present
-          # The control: the caller's own receipt comes back carrying the
-          # caller's own tenant, and the object key is asserted under the
-          # same tenant's prefix (internal/ingest/ingest_test.go:146).
           expects: receipt.Tenant
           file: internal/ingest/ingest_test.go
           line: 155
 
-  # ----------------------------------------------------------- build claim
   - id: build-claim
-    # `update`: the worker moves a builds row — queued → running on the
-    # claim, then running → succeeded/failed — and this is the path through
-    # which every tenant's build is reached. The claim's statement is
-    # deliberately tenant-blind (internal/builds/store.go:165-196): a tenant
-    # predicate on the queue would idle one tenant's lane behind another's.
     operation: update
     subject: builds
     enforced:
-      # Line 181 is the claim's RETURNING list: the tenant the claimed row
-      # carries is read back from the row, and the boundary is the next
-      # comparison — internal/builds/worker.go:127 refuses a receipt whose
-      # tenant is not the build's, before the tarball is fetched. That line
-      # is the actual enforcement and cannot be named here: it spells the
-      # value `Tenant`, and `enforced.line` must carry `tenant_id`. The
-      # upload target is the build's own prefix, fixed at creation
-      # (internal/builds/builds.go:78), so a claimed row can only ever write
-      # under its own tenant.
       mechanism: repository-method
       file: internal/builds/store.go
       line: 184
@@ -242,78 +79,17 @@ entryPoints:
       cases:
         - id: no-identity
           asserts: absent
-          # A receipt that names no tenant is not any account's, and the
-          # worker refuses it before the fetch. The test seeds the tarball
-          # under the receipt's key so the tenant check is the only thing
-          # that can refuse it. Added by this packet; verified able to fail:
-          # with the check removed the build runs and uploads, and this
-          # exact line is what goes red.
           expects: runner.calls
           file: internal/builds/worker_test.go
           line: 284
         - id: other-account
           asserts: absent
-          # A receipt from acme presented to beta's build. The tarball is in
-          # the store under acme's key, so only the tenant check stops the
-          # build — before this packet the test seeded no object and passed
-          # on a fetch failure instead, which is green for a reason it does
-          # not name. Now verified able to fail: with the check removed,
-          # runner.calls is 1 and this exact line goes red.
           expects: runner.calls
           file: internal/builds/worker_test.go
           line: 259
         - id: own-account
           asserts: present
-          # The control: the build's own tenant's content is uploaded under
-          # the build's own prefix — "tenants/acme/dist/docs/" for acme's
-          # docs build.
           expects: up.prefix
           file: internal/builds/worker_test.go
           line: 211
 
-# # WHAT THE CHECKER WILL REPORT, AND WHY IT IS NOT PAPERED OVER
-#
-# `tenancy.enumeration-partial` (warning): the scanner reads SQL statements
-# and press's statements are multi-line Go raw strings whose key-bearing
-# lines are column lists, so it attributes ZERO statements and names the
-# eight sites in `nonRowSites` above plus the two declared entry points it
-# cannot classify (operation `call` is not a statement the scanner reads;
-# store.go:184 cannot be read as an `update`). Closure is therefore NOT
-# proven, and this file says so rather than implying it: the enumeration is
-# declared, the scanner's residue is named, and a statement that appears
-# outside these six would not be caught by the scanner reading press.
-#
-# `tenancy.scope-key-unused` (warning): no statement the scanner can read
-# carries `tenant_id` — the same limit, one sentence further.
-#
-# # WHAT IS DELIBERATELY NOT DECLARED, SO IT CANNOT BE DISCOVERED
-#
-#   * `builds.Get` (internal/builds/store.go:94-111) and
-#     `builds.Transition` (internal/builds/store.go:119-148): by-primary-key
-#     reads and writes with no tenant predicate. Not caller-reachable today —
-#     no handler, no queue consumer takes an id from outside the service —
-#     and not declarable in this format, because an entry point's
-#     `enforced.line` has to carry the key and neither statement scopes on
-#     it. The day a route exposes builds by id, these become the leak, and
-#     the fix is a tenant predicate, not a line in this file.
-#   * the receipt read inside Claim (internal/builds/store.go:203-210):
-#     likewise by id, and the worker's tenant comparison
-#     (internal/builds/worker.go:127) is what bounds it.
-#   * `cmd/press-gate` (the nginx auth_request door): it reads no row — it
-#     resolves a token through identity's introspection and admits accounts
-#     on `PRESS_NOTES_ACCOUNTS` — and no line in it carries `tenant_id`, so
-#     it cannot be an entry point here even though it is account-aware. Its
-#     cross-account behavior is asserted in internal/verify/verify_test.go:62
-#     (a valid token for another org gets the same 401 as a forged one).
-#   * `/healthz` and `/readyz`: no tenant, no row.
-#
-# # WHAT THIS FILE DOES NOT PROVE
-#
-# The two negative arms above are asserted on lines a reader can open, but
-# this checker only READS its declaration — it does not run `go test`. The
-# tests were run by this packet and are green, and the three arms that assert
-# a refusal were each verified able to fail by removing the check they test.
-# The by-id statements' cross-tenant safety is an argument about reachability,
-# not a test: no test asserts "Get cannot be called with another tenant's id"
-# because the guarantee is that nothing outside the service chooses the id,
-# and that is a property of the call graph rather than of an assertion.
