@@ -15,12 +15,6 @@ import (
 	"github.com/anywaye/press/internal/store"
 )
 
-// The worker turns a receipt into artifacts: claim a queued build, fetch the
-// tarball, lay it into the engine's content tree, build, upload under the
-// build's own prefix. Every step is a collaborator behind an interface so the
-// whole lifecycle is testable without R2, without node, and without a git
-// remote — and so a failure at any step is a failed build with the reason
-// recorded, never a build stuck in running.
 
 // Extractor lays a tarball out under a directory. press's own implementation
 // refuses paths that escape the destination, because a tarball is untrusted
@@ -64,8 +58,6 @@ type Worker struct {
 	runner    Runner
 	uploader  Uploader
 	builds    Records
-	// scratch is the temp-space seam so a test can point the worker at a
-	// directory it cleans itself.
 	scratch func(dir, pattern string) (string, error)
 }
 
@@ -111,7 +103,6 @@ func (w *Worker) RunClaimed(ctx context.Context, b Build, receipt ReceiptSource,
 	return w.finish(ctx, b, receipt, engineRef)
 }
 
-// finish runs the build's steps and records where it landed.
 func (w *Worker) finish(ctx context.Context, b Build, receipt ReceiptSource, engineRef string) (State, error) {
 	if err := w.run(ctx, b, receipt, engineRef); err != nil {
 		_ = w.builds.Transition(ctx, b.ID, StateFailed)
@@ -125,10 +116,6 @@ func (w *Worker) finish(ctx context.Context, b Build, receipt ReceiptSource, eng
 
 func (w *Worker) run(ctx context.Context, b Build, receipt ReceiptSource, engineRef string) error {
 	if receipt.Tenant != b.Tenant {
-		// The one cross-tenant shape this code can be handed: a receipt
-		// from another tenant. The build record's tenant is the caller's;
-		// the receipt's must match it or this is a wiring bug and the
-		// content never leaves this function.
 		return fmt.Errorf("receipt tenant %q does not match build tenant %q", receipt.Tenant, b.Tenant)
 	}
 
@@ -143,8 +130,6 @@ func (w *Worker) run(ctx context.Context, b Build, receipt ReceiptSource, engine
 	}
 	defer os.RemoveAll(work)
 
-	// The content tree the engine's --source mode reads: docs/ for the
-	// public kind, notes/ for the private one.
 	contentDir := filepath.Join(work, "content")
 	if err := os.MkdirAll(contentDir, 0o755); err != nil {
 		return fmt.Errorf("content dir: %w", err)
@@ -166,10 +151,6 @@ func (w *Worker) run(ctx context.Context, b Build, receipt ReceiptSource, engine
 		return fmt.Errorf("build: %w", err)
 	}
 
-	// The upload target is the build record's prefix — computed at creation
-	// from the build's tenant and kind, never from the receipt or the
-	// request. A worker that accepted a prefix from anywhere else would be
-	// the one place a cross-tenant write could start.
 	distDir := filepath.Join(engineDir, "dist", kindDir)
 	if err := w.uploader.Upload(ctx, b.ArtifactPrefix, distDir); err != nil {
 		return fmt.Errorf("upload %s: %w", b.ArtifactPrefix, err)
@@ -204,22 +185,12 @@ func (TarExtractor) Extract(_ context.Context, r io.Reader, destDir string) erro
 		if err != nil {
 			return fmt.Errorf("read the tarball: %w", err)
 		}
-		// A member with a `..` element is refused, not rewritten. The
-		// tempting defense — Clean the path and carry on — silently
-		// renames the archive's content, and an archive whose meaning
-		// changed under extraction is worse than one that failed loudly.
-		// The prefix check is the second line, not the first.
 		for _, part := range strings.Split(filepath.ToSlash(hdr.Name), "/") {
 			if part == ".." {
 				return fmt.Errorf("%w: %s", ErrPathEscape, hdr.Name)
 			}
 		}
 		target := filepath.Join(destDir, filepath.Clean("/"+hdr.Name))
-		// A member whose cleaned path equals the destination is the
-		// tarball's own root entry ("tar -czf ." writes one), and it is not
-		// an escape: the prefix test is for paths strictly INSIDE the
-		// destination, so the root needs its own clause. Refusing it made
-		// every tarball produced with a leading dot unloadable.
 		dest := filepath.Clean(destDir)
 		if target != dest && !strings.HasPrefix(target, dest+string(filepath.Separator)) {
 			return fmt.Errorf("%w: %s", ErrPathEscape, hdr.Name)
@@ -231,7 +202,7 @@ func (TarExtractor) Extract(_ context.Context, r io.Reader, destDir string) erro
 			continue
 		}
 		if hdr.Typeflag != tar.TypeReg {
-			continue // symlinks and devices are not documentation
+			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err

@@ -1,34 +1,3 @@
-// The build table on the one cluster: the same pgx shape as
-// ingest.PostgresReceipts (an interface over the pool plus a constructor),
-// because the fleet reads a store the same way everywhere and a second
-// pattern here would be a second thing to audit for tenant scoping.
-//
-// # WHY THE CLAIM IS ONE STATEMENT
-//
-// Two press-claim processes poll the same table. A claim that SELECTs a
-// queued build and then UPDATEs it is two statements with a gap between
-// them, and the gap is where a double-claim lives: both processes read the
-// same queued row, both move it to running, both build it, and the tenant
-// gets two uploads racing under one prefix. The claim below is a single
-// UPDATE over a CTE that locks the chosen row FOR UPDATE and skips rows
-// another claimer already holds (SKIP LOCKED), so the database serializes
-// the decision and a build is handed to exactly one runner. A double-claim
-// would cost a tenant a half-overwritten site; the statement's shape is
-// what prevents it.
-//
-// # WHY THE CLAIM SELECTS BY STATE AND NOT BY TENANT
-//
-// Get, Transition and the receipt read below reach a row by its primary key
-// with no tenant predicate either, but their ids are chosen inside the
-// service — a claimed row, or a row the worker already holds. The claim's
-// breadth is different in kind: it answers "is there work anywhere", for
-// every tenant at once, and a tenant filter on it would idle the loop while
-// another tenant's queue waited. The tenant stays on the row (it is written
-// at insert and read back on claim), and the worker refuses a receipt whose
-// tenant is not the build's, so the claim's breadth never becomes a breadth
-// of writes: the upload target is the claimed record's own prefix. Every one
-// of these sites is named and reasoned in tenancy.yml at this repository's
-// root, so the statement does not have to be trusted to be audited.
 package builds
 
 import (
@@ -49,9 +18,6 @@ import (
 // lifecycle refusing, and the two want different responses.
 var ErrNoSuchBuild = errors.New("builds: no such build")
 
-// pgxQuerier is the pgx surface the builds need: Exec for writes, QueryRow
-// for the claim and the reads. Tests stand a fake behind it; production
-// passes the pool, which implements both.
 type pgxQuerier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
@@ -77,9 +43,6 @@ func (p *PostgresBuilds) Insert(ctx context.Context, b Build) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`
 	created := b.CreatedAt
 	if created.IsZero() {
-		// A build without a creation time sorts nowhere in the claim's
-		// ORDER BY, so the store stamps one rather than storing the zero
-		// time and letting the queue order lie.
 		created = time.Now()
 	}
 	_, err := p.q.Exec(ctx, stmt,
@@ -121,9 +84,6 @@ func (p *PostgresBuilds) Transition(ctx context.Context, id string, next State) 
 	if err != nil {
 		return err
 	}
-	// The lifecycle check runs against the CURRENT state, the same rule the
-	// Build method enforces, so the store and the record never disagree
-	// about which moves are legal.
 	probe := current
 	if err := probe.Transition(next); err != nil {
 		return err
@@ -137,10 +97,6 @@ func (p *PostgresBuilds) Transition(ctx context.Context, id string, next State) 
 		return fmt.Errorf("builds: move the build: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		// Someone moved the row after the read — the claim loop is the
-		// usual someone. The move is refused rather than retried, because
-		// a retry would apply a transition checked against a state the row
-		// no longer holds.
 		return fmt.Errorf("%w: %s -> %s (build %s moved under the transition)",
 			ErrIllegalTransition, current.State, next, id)
 	}
@@ -163,11 +119,6 @@ type Claimed struct {
 // Found false and no error — an empty queue is the loop's normal state, not
 // a failure.
 func (p *PostgresBuilds) Claim(ctx context.Context) (Claimed, error) {
-	// One statement: the CTE locks the oldest queued row (SKIP LOCKED steps
-	// over rows a concurrent claimer holds), and the UPDATE moves exactly
-	// that row to running and hands it back. Two processes running this at
-	// once divide the queue between them; neither ever sees the other's
-	// row.
 	const claim = `
 		WITH next AS (
 		    SELECT id
@@ -195,11 +146,6 @@ func (p *PostgresBuilds) Claim(ctx context.Context) (Claimed, error) {
 	}
 	c.Build.Kind, c.Build.State = store.Kind(kind), State(state)
 
-	// The receipt locates the tarball. It is read after the claim because
-	// the builds row, not the receipt row, is what concurrent claimers
-	// contend on — and the worker refuses a receipt whose tenant is not the
-	// build's, so a mismatched row fails the build instead of crossing a
-	// tenant boundary.
 	const receipt = `
 		SELECT tenant_id, kind, object_key
 		FROM ingest_receipts

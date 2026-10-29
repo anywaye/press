@@ -1,8 +1,3 @@
-// Package builds is the build lifecycle: a receipt becomes a build, the
-// build's sandbox runs, the artifacts land under the receipt's tenant
-// prefix. press records the lifecycle and enforces its one rule — a build
-// may only move forward — because a state machine that accepts a backward
-// move lets a finished build be silently rebuilt under a changed key.
 package builds
 
 import (
@@ -19,15 +14,9 @@ import (
 type State string
 
 const (
-	// StateQueued is recorded, not started. The worker pool picks it up.
 	StateQueued State = "queued"
-	// StateRunning means a sandbox holds this build.
 	StateRunning State = "running"
-	// StateSucceeded means the artifacts are written under the tenant
-	// prefix. It is terminal.
 	StateSucceeded State = "succeeded"
-	// StateFailed means the build stopped without artifacts. It is
-	// terminal.
 	StateFailed State = "failed"
 )
 
@@ -61,9 +50,6 @@ type Build struct {
 	Kind      store.Kind
 	ReceiptID string
 	State     State
-	// ArtifactPrefix is computed at creation from the tenant and kind, so
-	// the record itself carries where the artifacts landed and no caller
-	// has to remember.
 	ArtifactPrefix string
 	CreatedAt      time.Time
 }

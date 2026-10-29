@@ -39,8 +39,6 @@ func (u *DirUploader) Upload(ctx context.Context, prefix, dir string) error {
 		if err != nil {
 			return err
 		}
-		// The prefix is a directory, with or without its slash: the key is
-		// always under it, never beside it.
 		key := strings.TrimSuffix(prefix, "/") + "/" + filepath.ToSlash(rel)
 		body, err := os.ReadFile(path)
 		if err != nil {

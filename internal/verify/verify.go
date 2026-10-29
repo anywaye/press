@@ -1,9 +1,3 @@
-// Package verify is the private site's door: a request to /notes/* is
-// admitted when identity resolves its bearer token and the token's account
-// is allowed to read this tenant's notes. It is one endpoint behind nginx's
-// auth_request, and it exists as a separate binary from the ingest
-// service because it is on the request path of every private page and the
-// ingest path is on none of them — the two want different failure modes.
 package verify
 
 import (
@@ -69,20 +63,12 @@ func (h *HTTPIntrospector) Introspect(ctx context.Context, token string) (Intros
 		return Introspection{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// Self-introspection: identity's route requires a caller, and the token
-	// asking about itself is the one caller it admits without an account
-	// relationship. Without this header the route answers 401 for every
-	// token — a gate that fails closed for the right reason and the wrong
-	// behavior.
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return Introspection{}, fmt.Errorf("verify: identity unreachable: %w", err)
 	}
 	defer resp.Body.Close()
-	// A 401 from identity is identity's answer, not an outage: the token did
-	// not resolve. A 5xx is an outage and must NOT be treated as admission —
-	// the gate fails closed.
 	if resp.StatusCode == http.StatusUnauthorized {
 		return Introspection{Active: false}, nil
 	}
@@ -126,16 +112,10 @@ func (g *Gate) Admit(w http.ResponseWriter, r *http.Request) {
 	}
 	accountID, err := g.verifier.Verify(r.Context(), token)
 	if err != nil {
-		// Fail closed: a forged token, a wrong-audience token, a token for
-		// another org, or an unreachable identity all answer the same 401.
-		// Distinguishing them would turn the gate into an oracle.
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	if !g.allowedAccounts[accountID] {
-		// A valid token for the wrong org gets the same 401 as a forged
-		// one: the answer must not distinguish "bad token" from "not your
-		// tenant", or the endpoint becomes an account-existence oracle.
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}

@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// Behavior tests for the dispatch: a JWS goes to the key set, an opaque token
-// goes to identity, and a forged JWS never reaches introspection.
 
 type stubVerifier struct {
 	got   string

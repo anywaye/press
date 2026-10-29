@@ -1,15 +1,3 @@
-// Package ingest is press's entry point: a tarball arrives, a caller is
-// verified, an object lands under the caller's tenant prefix, and a receipt is
-// written. Every decision in this package follows from one invariant:
-//
-//	the tenant comes from the verified token, never from the request.
-//
-// A request that names a different tenant is not a confused request to be
-// tolerated; it is a caller whose body claims an identity the token does not.
-// This package therefore has no field that accepts a tenant from a caller at
-// all — the only inputs are the claims and the content's own names (kind,
-// project, version), each validated tight enough that no path can escape its
-// prefix.
 package ingest
 
 import (
@@ -55,10 +43,6 @@ type Service struct {
 	verifier auth.Verifier
 	store    store.Client
 	receipts Receipts
-	// queues enqueues the build for a receipt, in the same request that
-	// records it. A receipt without a build is a promise nothing keeps:
-	// the caller saw 201 and no one is building their content. Found by
-	// publishing to a live press and watching the builds table stay empty.
 	queues   Queue
 	maxBytes int64
 }
@@ -94,8 +78,6 @@ type Request struct {
 // the tarball; the form fields describe it.
 func ParseRequest(r *http.Request) (Request, io.Reader, error) {
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		// A form that fails to parse is a caller sending something press
-		// did not document; the error names what to read.
 		return Request{}, nil, fmt.Errorf("ingest: body is not the documented multipart form: %w", err)
 	}
 	req := Request{
@@ -103,10 +85,6 @@ func ParseRequest(r *http.Request) (Request, io.Reader, error) {
 		Project: strings.TrimSpace(r.FormValue("project")),
 		Version: strings.TrimSpace(r.FormValue("version")),
 	}
-	// A form that names a tenant is refused, not ignored. press's tenant is
-	// the token's account_id and there is no field for it: a caller sending
-	// one believes it chose its tenant, and quietly ignoring the field
-	// would let that belief ship.
 	if r.FormValue("tenant") != "" {
 		return req, nil, fmt.Errorf("ingest: there is no tenant field; the tenant is the token's account")
 	}
@@ -139,22 +117,12 @@ func (s *Service) Ingest(ctx context.Context, token string, req Request, body io
 	}
 	tenant := claims.AccountID
 
-	// A pantry ingest's project and version become path segments in its
-	// artifact prefix, so they are validated here — at the service seam —
-	// and not only in the form parser: a receipt whose project can never
-	// produce a valid artifact key must not be recorded at all. This is
-	// also the guard that keeps a traversal-shaped project name out of the
-	// build's key layout one hop later.
 	if store.Kind(req.Kind) == store.KindPantry {
 		if _, err := store.PantryArtifactPrefix(tenant, req.Project, req.Version); err != nil {
 			return Receipt{}, http.StatusBadRequest, fmt.Errorf("ingest: %w", err)
 		}
 	}
 
-	// The cap is enforced while reading, before anything is written, so an
-	// over-cap request cannot leave a partial object in the tenant's
-	// prefix. This is the one place press spends a reader to save a
-	// reconciliation job.
 	limited := io.LimitReader(body, s.maxBytes+1)
 	data, err := io.ReadAll(limited)
 	if err != nil {
@@ -175,8 +143,6 @@ func (s *Service) Ingest(ctx context.Context, token string, req Request, body io
 
 	key, err := store.IngestKey(tenant, id)
 	if err != nil {
-		// The tenant came from identity and identity's ids are already
-		// segment-clean, so this is a press bug, not a caller error.
 		return Receipt{}, http.StatusInternalServerError, fmt.Errorf("ingest: %w", err)
 	}
 
@@ -198,18 +164,10 @@ func (s *Service) Ingest(ctx context.Context, token string, req Request, body io
 		Caller:    claims.Subject,
 	}
 	if err := s.receipts.Insert(ctx, receipt); err != nil {
-		// The object exists and the receipt does not. That is a real
-		// orphan, and press's reconciliation run exists to sweep
-		// ingest/ objects with no receipt row. Returning 500 says so
-		// instead of hiding a lost receipt behind a 201.
 		return Receipt{}, http.StatusInternalServerError, fmt.Errorf("ingest: object written to %s but the receipt did not record: %w", key, err)
 	}
 	if s.queues != nil {
 		if err := s.queues.Enqueue(ctx, receipt); err != nil {
-			// The receipt is a row the caller can act on; the missing
-			// build is the difference between "your content arrived" and
-			// "your content is being built". A 500 with the reason keeps
-			// the caller's retry able to produce a build.
 			return Receipt{}, http.StatusInternalServerError, fmt.Errorf("ingest: receipt %s recorded but the build did not enqueue: %w", receipt.ID, err)
 		}
 	}
@@ -247,10 +205,6 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-// newReceiptID is a 128-bit server-side id, base32hex so it is URL-safe and
-// sorts lexicographically. The receipt id is never taken from the request:
-// a caller that chose its own id could aim its upload at another tenant's
-// prefix.
 func newReceiptID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {

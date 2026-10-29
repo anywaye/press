@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// The key layout is the tenant-isolation boundary, so it is tested as a pure
-// function: every rule a reader would have to trust is one assertion here.
 
 func TestIngestKeyIsTheCallersOwnPrefixAndNothingElse(t *testing.T) {
 	key, err := IngestKey("acme", "abc123")
@@ -35,14 +33,12 @@ func TestArtifactPrefixMatchesWhatNginxMounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("notes prefix: %v", err)
 	}
-	// The two trees of the docs build, mounted at / and /notes.
 	if docs != "tenants/acme/dist/docs/" {
 		t.Fatalf("docs prefix = %q", docs)
 	}
 	if notes != "tenants/acme/dist/notes/" {
 		t.Fatalf("notes prefix = %q", notes)
 	}
-	// A private kind never shares a prefix with a public one.
 	if strings.HasPrefix(notes, docs) || strings.HasPrefix(docs, notes) {
 		t.Fatal("public and private artifact prefixes overlap")
 	}
@@ -64,8 +60,6 @@ func TestPantryArtifactPrefixIsProjectAndVersionScoped(t *testing.T) {
 }
 
 func TestKindKnowsWhatIsPrivate(t *testing.T) {
-	// The one place public and private are written down; everything that
-	// cares reads it here.
 	if !KindNotes.Private() {
 		t.Fatal("notes must be private")
 	}

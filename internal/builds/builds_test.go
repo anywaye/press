@@ -10,8 +10,6 @@ import (
 )
 
 func TestNewBuildFixesItsArtifactPrefixAtCreation(t *testing.T) {
-	// The prefix is where the artifacts will land. Deciding it later is how
-	// a build ends up writing under someone else's tenant.
 	b, err := New("b1", "acme", store.KindNotes, "r1", time.Unix(0, 0))
 	if err != nil {
 		t.Fatalf("new: %v", err)
@@ -51,8 +49,6 @@ func TestTransitionRefusesSkippingAState(t *testing.T) {
 }
 
 func TestFailedBuildCanStillFailAgainConsistently(t *testing.T) {
-	// A terminal state is terminal: a failed build that is retried is a NEW
-	// build record, not a resurrection of the old one.
 	b, _ := New("b1", "acme", store.KindDocs, "r1", time.Unix(0, 0))
 	if err := b.Transition(StateFailed); err != nil {
 		t.Fatalf("queued -> failed: %v", err)
@@ -62,8 +58,6 @@ func TestFailedBuildCanStillFailAgainConsistently(t *testing.T) {
 	}
 }
 
-// recordsFake is the smallest Records that can lie, so the persistence
-// behavior is testable without the cluster.
 type recordsFake struct {
 	rows map[string]Build
 	bad  map[string]bool
@@ -94,11 +88,6 @@ func (r *recordsFake) Transition(_ context.Context, id string, next State) error
 	if !ok {
 		return errors.New("builds: no such build")
 	}
-	// A real store reads the record, applies the transition, and writes it
-	// back — which is only legal as one step, because the lifecycle is
-	// checked against the CURRENT state. The fake models that, because a
-	// fake that transitions a copy would pass against a store that refuses
-	// to persist, and that is the bug this fake exists to catch.
 	if err := b.Transition(next); err != nil {
 		return err
 	}
@@ -107,9 +96,6 @@ func (r *recordsFake) Transition(_ context.Context, id string, next State) error
 }
 
 func TestRecordsTransitionIsGatedByTheLifecycle(t *testing.T) {
-	// The same rule through the persistence seam: a driver that tried to
-	// walk a succeeded build backwards fails, and the stored record is
-	// unchanged.
 	r := newRecordsFake()
 	b, _ := New("b1", "acme", store.KindNotes, "r1", time.Unix(0, 0))
 	if err := r.Insert(context.Background(), b); err != nil {

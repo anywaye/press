@@ -1,7 +1,3 @@
-// Package queue is the adapter between the ingest path and the builds
-// store: the ingest declares what it enqueues (a receipt in, a queued build
-// out) and the builds package owns the table. It lives between them because
-// builds already imports ingest — the direction has to stay acyclic.
 package queue
 
 import (
@@ -24,12 +20,8 @@ import (
 // enqueued, and a transaction that spanned both would hide a crash window
 // instead of naming it.
 type QueueOnBuilds struct {
-	// NewID mints the build's id; a test hands it a counter so the row is
-	// assertable.
 	NewID func() string
-	// Insert is the builds table's writer.
 	Insert func(ctx context.Context, b builds.Build) error
-	// Now, likewise for created_at.
 	Now func() time.Time
 }
 
@@ -49,8 +41,6 @@ func (q QueueOnBuilds) Enqueue(ctx context.Context, r ingest.Receipt) error {
 func DefaultBuildID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		// crypto/rand failing is a platform fault; a timestamp would be a
-		// unpredictable id nobody chose.
 		panic(fmt.Sprintf("ingest: cannot mint a build id: %v", err))
 	}
 	return hex.EncodeToString(b[:])

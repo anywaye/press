@@ -1,9 +1,3 @@
-// Package config is press's environment: everything the binary needs that is
-// not a request. Every field is read from the environment exactly once at
-// startup, because a config value that can change under a running process is a
-// config value nobody can reason about. Nothing here has a default that
-// changes behavior silently — where a default exists it is the safe one
-// (a small ingest cap, the public identity issuer).
 package config
 
 import (
@@ -15,50 +9,26 @@ import (
 // Config is the resolved configuration. Construct with Load, which fails on a
 // value that would make the service misbehave rather than defaulting it.
 type Config struct {
-	// Addr is the listen address. The fleet convention is :8080.
 	Addr string
 
-	// DatabaseURL is the one Postgres cluster's DSN for the press database.
-	// press shares the cluster with identity, billing and courier and owns
-	// exactly one database on it, named after itself — the boundary is the
-	// database, not the machine (architecture/one-cluster).
 	DatabaseURL string
 
-	// JWKSURL is identity's public key set, where caller tokens are verified.
 	JWKSURL string
-	// IdentityURL is identity's origin, where opaque session tokens are
-	// resolved through the introspection route.
 	IdentityURL string
 
-	// Store is the R2 (S3 API) bucket press ingests into and builds write to.
 	Store Store
 
-	// MaxIngestBytes is the largest tarball press will accept in one request.
-	// The cap is enforced while streaming, before anything is written, so an
-	// over-cap request leaves no partial object behind.
 	MaxIngestBytes int64
 
-	// BuildConcurrency is how many builds press will run at once. One build
-	// is a sandbox with a node toolchain; the substrate is shared.
 	BuildConcurrency int
 }
 
 // Store is the object storage press writes artifacts to.
 type Store struct {
-	// Endpoint is the S3 API origin, e.g.
-	// https://<account>.r2.cloudflarestorage.com. Empty means the AWS
-	// default, which is not where anywaye's objects live.
 	Endpoint string
-	// Bucket is the artifact bucket. Every press object lives under it,
-	// tenant-scoped by key.
 	Bucket string
-	// AccessKeyID and SecretAccessKey are the R2 credentials.
 	AccessKeyID     string
 	SecretAccessKey string
-	// SessionToken is present when the credentials are R2's temporary
-	// (STS-style) credentials derived from a parent R2 API token — which is
-	// the fleet's shape: a long-lived parent on the box, short-lived derived
-	// credentials, refreshed on a schedule.
 	SessionToken string
 }
 
@@ -108,10 +78,6 @@ func Load() (Config, error) {
 		SecretAccessKey: os.Getenv("PRESS_STORE_SECRET_ACCESS_KEY"),
 		SessionToken:    os.Getenv("PRESS_STORE_SESSION_TOKEN"),
 	}
-	// The store is not required at boot the way the database is: press
-	// answers /healthz and /readyz without it, and the readiness check is
-	// what refuses traffic when storage is misconfigured. A boot that fails
-	// on a missing bucket is a boot that cannot report *why* it is broken.
 	if c.Store.Bucket == "" {
 		c.Store.Bucket = "anywaye-docs-artifacts"
 	}

@@ -1,16 +1,3 @@
-// The chain verifier: identity issues two kinds of credential and press must
-// accept both, because its callers hold whichever one they have.
-//
-//   - Agents and services hold RS256 JWTs (JWKS-verifiable).
-//   - A human who ran `cafe login` holds an opaque session token — revocation
-//     is a row delete, so identity keeps it server-side and it is NOT a JWS.
-//
-// press's first ingest accepted only the first kind, so the CLI's own login
-// token was refused with "compact JWS format must have three parts" — a
-// sentence that names the format and not the problem. The dispatcher reads
-// the token's shape: three parts is a JWS and goes to the key set; anything
-// else is opaque and goes to identity's introspection route, which is the
-// same route the notes gate already lives on.
 package auth
 
 import (
@@ -59,7 +46,6 @@ func (c ChainVerifier) Verify(ctx context.Context, token string) (Claims, error)
 		return Claims{}, fmt.Errorf("auth: identity does not consider the token active")
 	}
 	if in.AccountID == "" {
-		// A session with no account names no tenant, so it authors nothing.
 		return Claims{}, fmt.Errorf("auth: the token carries no account_id")
 	}
 	return Claims{AccountID: in.AccountID, Subject: in.Subject}, nil

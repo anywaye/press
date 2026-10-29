@@ -18,8 +18,6 @@ import (
 // follow-up packet's optimization, not this one's correctness risk.
 type GitEngine struct {
 	repo string
-	// scratch and run are the seams, so tests assert the argv and the layout
-	// without a git remote.
 	scratch func(dir, pattern string) (string, error)
 	run     func(ctx context.Context, dir, name string, args ...string) error
 }

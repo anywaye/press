@@ -1,11 +1,5 @@
 package builds
 
-// Behavior tests for the claim loop: each one names a thing the loop must
-// do, or must refuse, and drives it with fakes. No Postgres, no node, no
-// network. The one guarantee the loop depends on — a queued build is handed
-// out once — is modeled by the fake's mutex the way SKIP LOCKED models it
-// in the statement; the TEST_DATABASE_URL-gated test in store_test.go holds
-// the real database to the same promise.
 
 import (
 	"context"
@@ -20,9 +14,6 @@ import (
 	"github.com/anywaye/press/internal/store"
 )
 
-// claimStoreFake is the smallest Records-plus-Claim that can lie. The mutex
-// is the fake's SKIP LOCKED: Claim holds it across the find-and-flip, so two
-// concurrent claims divide the queue the way two concurrent statements do.
 type claimStoreFake struct {
 	mu       sync.Mutex
 	rows     map[string]Build
@@ -84,9 +75,6 @@ func (f *claimStoreFake) Claim(_ context.Context) (Claimed, error) {
 	return Claimed{}, nil
 }
 
-// countingRunner is a Runner that records how many builds it ran without
-// sharing memory unsafely, so the race tests can ask "how many ran" after
-// the goroutines land.
 type countingRunner struct {
 	calls atomic.Int64
 	fail  error
@@ -109,9 +97,6 @@ func (r *countingRunner) Build(_ context.Context, engineDir, _ string) error {
 	return nil
 }
 
-// newClaimLoopTest wires a loop over fakes with one queued build and its
-// tarball waiting, returning the loop and the parts the test asserts
-// against.
 func newClaimLoopTest(t *testing.T, runner *countingRunner) (*Loop, *claimStoreFake) {
 	t.Helper()
 	recs := newClaimStoreFake()
@@ -133,9 +118,6 @@ func newClaimLoopTest(t *testing.T, runner *countingRunner) (*Loop, *claimStoreF
 }
 
 func TestOnceClaimsTheQueuedBuildAndRecordsSucceeded(t *testing.T) {
-	// The spine's whole promise in one test: a queued build is claimed
-	// exactly once, the claim moves it to running, and the successful run
-	// records succeeded.
 	l, recs := newClaimLoopTest(t, &countingRunner{})
 	claimed, err := l.Once(context.Background())
 	if err != nil {
@@ -148,7 +130,6 @@ func TestOnceClaimsTheQueuedBuildAndRecordsSucceeded(t *testing.T) {
 	if stored.State != StateSucceeded {
 		t.Fatalf("stored state = %q, want succeeded", stored.State)
 	}
-	// A second poll finds nothing: the build was claimed exactly once.
 	claimed, err = l.Once(context.Background())
 	if err != nil || claimed {
 		t.Fatalf("second Once = (%v, %v); want (false, nil)", claimed, err)
@@ -156,8 +137,6 @@ func TestOnceClaimsTheQueuedBuildAndRecordsSucceeded(t *testing.T) {
 }
 
 func TestOnceAFailedRunRecordsFailed(t *testing.T) {
-	// Whatever breaks, the row lands on failed and Once hands the reason
-	// back — the loop records first and reports second.
 	l, recs := newClaimLoopTest(t, &countingRunner{fail: errors.New("npm ci failed")})
 	claimed, err := l.Once(context.Background())
 	if err == nil || !claimed {
@@ -170,8 +149,6 @@ func TestOnceAFailedRunRecordsFailed(t *testing.T) {
 }
 
 func TestOnceAnEmptyQueueIsANoop(t *testing.T) {
-	// An empty queue is the loop's normal state: no claim, no run, no
-	// error, and the runner is never asked to build the air.
 	runner := &countingRunner{}
 	recs := newClaimStoreFake()
 	w := NewWorker(fakeStoreReader{}, TarExtractor{}, &fakeEngine{}, runner, &fakeUploader{}, recs)
@@ -186,10 +163,6 @@ func TestOnceAnEmptyQueueIsANoop(t *testing.T) {
 }
 
 func TestConcurrentClaimsHandABuildOutOnce(t *testing.T) {
-	// The shape of the double-claim: sixteen claimers race for one queued
-	// build, and exactly one of them is handed it. The fake's mutex stands
-	// in for SKIP LOCKED; the gated test holds the database to the same
-	// count with real transactions.
 	l, _ := newClaimLoopTest(t, &countingRunner{})
 	const racers = 16
 	var won atomic.Int64
@@ -218,9 +191,6 @@ func TestConcurrentClaimsHandABuildOutOnce(t *testing.T) {
 }
 
 func TestTwoLoopsRacingBuildTheBuildOnce(t *testing.T) {
-	// The loop-level version of the race: two loops share one queue, both
-	// poll at once, and the build runs exactly once — the loser finds an
-	// empty queue and does nothing.
 	recs := newClaimStoreFake()
 	b, _ := New("b1", "acme", store.KindDocs, "r1", time.Unix(0, 0))
 	_ = recs.Insert(context.Background(), b)
@@ -263,8 +233,6 @@ func TestTwoLoopsRacingBuildTheBuildOnce(t *testing.T) {
 }
 
 func TestRunClaimedRefusesABuildTheLoopNeverHandedOver(t *testing.T) {
-	// RunClaimed starts from running. A queued build routed through it is a
-	// caller skipping the claim — refused, and the record untouched.
 	w, recs, _, _, _ := newWorkerTest(t)
 	b, _ := New("b1", "acme", store.KindDocs, "r1", time.Unix(0, 0))
 	_ = recs.Insert(context.Background(), b)
@@ -277,4 +245,3 @@ func TestRunClaimedRefusesABuildTheLoopNeverHandedOver(t *testing.T) {
 	}
 }
 
-// (The runner/engine/uploader seams are tested in runner_test.go.)

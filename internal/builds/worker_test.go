@@ -15,10 +15,7 @@ import (
 	"github.com/anywaye/press/internal/store"
 )
 
-// Behavior tests for the worker: each one names a thing the worker must do,
-// or must refuse, and drives it with fakes. No node, no R2, no network.
 
-// fakeStoreReader answers Get from a map and counts calls.
 type fakeStoreReader struct {
 	objects map[string][]byte
 }
@@ -30,7 +27,6 @@ func (f fakeStoreReader) Get(_ context.Context, key string) ([]byte, error) {
 	return nil, store.ErrNotFound
 }
 
-// fakeEngine records the ref asked for and returns a temp dir it owns.
 type fakeEngine struct {
 	dir  string
 	err  error
@@ -45,9 +41,6 @@ func (f *fakeEngine) Checkout(_ context.Context, ref string) (string, error) {
 	return f.dir, nil
 }
 
-// fakeRunner records what it was asked to build, and can fail. It snapshots
-// the content tree it was handed, because the worker cleans its scratch
-// before the test can look at the filesystem.
 type fakeRunner struct {
 	err      error
 	calls    int
@@ -64,7 +57,6 @@ func (f *fakeRunner) Build(_ context.Context, engineDir, contentDir string) erro
 	if f.err != nil {
 		return f.err
 	}
-	// What the real runner leaves behind: a dist tree under the engine dir.
 	for _, kind := range []string{"docs", "notes"} {
 		p := filepath.Join(engineDir, "dist", kind)
 		if err := os.MkdirAll(p, 0o755); err != nil {
@@ -77,8 +69,6 @@ func (f *fakeRunner) Build(_ context.Context, engineDir, contentDir string) erro
 	return nil
 }
 
-// fakeUploader records the prefix and directory it was told to upload, and
-// can fail. The prefix is the assertion that matters.
 type fakeUploader struct {
 	err    error
 	prefix string
@@ -92,8 +82,6 @@ func (f *fakeUploader) Upload(_ context.Context, prefix, dir string) error {
 	return f.err
 }
 
-// recordsFake persists transitions for real, so the lifecycle is exercised
-// through the same code the Postgres store runs.
 type workerRecordsFake struct {
 	rows map[string]Build
 }
@@ -127,8 +115,6 @@ func (r *workerRecordsFake) Transition(_ context.Context, id string, next State)
 	return nil
 }
 
-// tarball builds a gzipped tarball with one file, so the extractor has real
-// bytes to chew.
 func tarball(t *testing.T, name, body string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -149,8 +135,6 @@ func tarball(t *testing.T, name, body string) []byte {
 	return buf.Bytes()
 }
 
-// walkRel lists every file under dir, relative to it, so a test can assert
-// the layout the worker materialized.
 func walkRel(dir string) ([]string, error) {
 	var out []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -174,8 +158,6 @@ func walkRel(dir string) ([]string, error) {
 	return out, nil
 }
 
-// newWorkerTest wires a worker over fakes and returns the parts the test
-// asserts against.
 func newWorkerTest(t *testing.T) (*Worker, *workerRecordsFake, *fakeRunner, *fakeUploader, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -206,8 +188,6 @@ func TestRunBuildsTheKindAndUploadsToTheBuildOwnPrefix(t *testing.T) {
 	if runner.calls != 1 {
 		t.Fatalf("runner ran %d times, want 1", runner.calls)
 	}
-	// The upload target is the build record's prefix — derived from the
-	// build's tenant and kind, and nothing else.
 	if want := "tenants/acme/dist/docs/"; up.prefix != want {
 		t.Fatalf("uploaded to %q, want %q", up.prefix, want)
 	}
@@ -217,8 +197,6 @@ func TestRunBuildsTheKindAndUploadsToTheBuildOwnPrefix(t *testing.T) {
 }
 
 func TestRunBuildExtractsTheNotesKindIntoTheNotesTree(t *testing.T) {
-	// The private kind's content must land under notes/ in the engine's
-	// content dir, or the build would produce an empty private site.
 	w, recs, runner, _, _ := newWorkerTest(t)
 	b, _ := New("b1", "acme", store.KindNotes, "r1", time.Unix(0, 0))
 	_ = recs.Insert(context.Background(), b)
@@ -241,13 +219,6 @@ func TestRunBuildExtractsTheNotesKindIntoTheNotesTree(t *testing.T) {
 }
 
 func TestRunBuildRefusesAReceiptFromAnotherTenant(t *testing.T) {
-	// The one cross-tenant shape this code can be handed. The tarball IS in
-	// the store under the receipt's own key, so the tenant check is the only
-	// thing that can stop the build: with it removed, this run fetches acme's
-	// content, builds it and uploads it under beta's prefix, and the
-	// zero-counts assertion below is what fails. Without the seeded object the
-	// test would pass on a fetch failure instead — green for a reason it does
-	// not name.
 	w, recs, runner, up, _ := newWorkerTest(t)
 	b, _ := New("b1", "beta", store.KindDocs, "r1", time.Unix(0, 0))
 	_ = recs.Insert(context.Background(), b)
@@ -268,11 +239,6 @@ func TestRunBuildRefusesAReceiptFromAnotherTenant(t *testing.T) {
 }
 
 func TestRunBuildRefusesAReceiptThatNamesNoTenant(t *testing.T) {
-	// The no-identity arm of the claim path: a receipt row with no tenant is
-	// not any account's, and the worker must not build it for whichever build
-	// happens to be beside it. The tarball IS in the store, so only the tenant
-	// check can refuse it — with the check removed the build succeeds and
-	// uploads, and the zero-counts assertion below is what fails.
 	w, recs, runner, up, _ := newWorkerTest(t)
 	b, _ := New("b1", "acme", store.KindDocs, "r1", time.Unix(0, 0))
 	_ = recs.Insert(context.Background(), b)
@@ -293,12 +259,10 @@ func TestRunBuildRefusesAReceiptThatNamesNoTenant(t *testing.T) {
 }
 
 func TestRunBuildFailsWithTheReasonAndNeverSticksInRunning(t *testing.T) {
-	// Whatever breaks, the record lands on failed. A build stuck in running
-	// is a build whose tenant silently never gets its artifacts.
 	for name, breakIt := range map[string]func(*newWorkerTestParts){
 		"runner fails": func(p *newWorkerTestParts) { p.runner.err = errors.New("npm ci failed") },
 		"store fetch fails": func(p *newWorkerTestParts) {
-			p.reader.objects = map[string][]byte{} // the key is absent
+			p.reader.objects = map[string][]byte{}
 		},
 		"upload fails": func(p *newWorkerTestParts) { p.up.err = errors.New("r2 503") },
 	} {
@@ -327,9 +291,6 @@ type newWorkerTestParts struct {
 }
 
 func TestTarExtractorRefusesATarballThatEscapesTheDestination(t *testing.T) {
-	// A tarball is untrusted input the same way a request is: a member
-	// named ../../etc/passwd is refused, and nothing is written outside
-	// the destination.
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
@@ -353,9 +314,6 @@ func TestTarExtractorRefusesATarballThatEscapesTheDestination(t *testing.T) {
 }
 
 func TestWorkerPinTheEngineRefItBuiltAgainst(t *testing.T) {
-	// A build is reproducible because it names the engine ref; the ref is
-	// recorded on the run, so a behavior change in the engine is diagnosable
-	// per build.
 	w, recs, _, _, _ := newWorkerTest(t)
 	b, _ := New("b1", "acme", store.KindDocs, "r1", time.Unix(0, 0))
 	_ = recs.Insert(context.Background(), b)
@@ -383,9 +341,6 @@ func TestRunRefusesABuildThatIsNotQueued(t *testing.T) {
 }
 
 func TestTarExtractorAcceptsTheTarballRootEntry(t *testing.T) {
-	// A tarball written with a leading dot (`tar -czf x .`) carries a root
-	// member named "./" — the destination itself. The traversal check must
-	// refuse what leaves the destination and admit what IS it.
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)

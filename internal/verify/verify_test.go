@@ -8,14 +8,9 @@ import (
 	"testing"
 )
 
-// Behavior tests for the door: each names a request the gate must admit or
-// refuse, driven through the real handler with a fake identity.
 
-// fakeVerifier answers from a table, and can fail the way an outage does. It
-// stands in for identity's chain verifier: a known token resolves to its
-// account id, an unknown one to an error (the gate turns either into 401).
 type fakeVerifier struct {
-	accounts map[string]string // token -> account id
+	accounts map[string]string
 	err     error
 }
 
@@ -50,9 +45,6 @@ func TestGateAdmitsATokenForAnAllowedAccount(t *testing.T) {
 }
 
 func TestGateRefusesEveryWrongCallerWithTheSame401(t *testing.T) {
-	// The shapes that must all answer 401 — and answer it identically, so
-	// the endpoint cannot be used to tell a forged token from a valid one
-	// belonging to another org.
 	ident := &fakeVerifier{accounts: map[string]string{
 		"good":      "acct-anywaye",
 		"other-org": "acct-acme",
@@ -66,8 +58,6 @@ func TestGateRefusesEveryWrongCallerWithTheSame401(t *testing.T) {
 }
 
 func TestGateFailsClosedWhenIdentityIsUnreachable(t *testing.T) {
-	// An outage is a closed door, never an open one: a notes site unreadable
-	// for a minute beats a notes site readable by everyone for a minute.
 	g := NewGate(&fakeVerifier{err: errors.New("dial tcp: connection refused")}, []string{"acct-anywaye"})
 	if code := admit(t, g, "any-token"); code != http.StatusUnauthorized {
 		t.Fatalf("code = %d, want 401", code)
@@ -75,9 +65,6 @@ func TestGateFailsClosedWhenIdentityIsUnreachable(t *testing.T) {
 }
 
 func TestGateWithNoAllowedAccountsRefusesEveryone(t *testing.T) {
-	// A misconfigured gate — no allowlist — is closed, not open. This is the
-	// assertion that makes the allowlist's absence a deployment failure
-	// instead of an open private site.
 	g := NewGate(&fakeVerifier{accounts: map[string]string{
 		"good": "acct-anywaye",
 	}}, nil)
@@ -100,11 +87,6 @@ func TestGateWithMultipleAllowedAccounts(t *testing.T) {
 }
 
 func TestHTTPIntrospectorPresentsTheTokenAsItsOwnCaller(t *testing.T) {
-	// identity's introspection route requires a caller; the token asking
-	// about itself is the one caller it admits without an account
-	// relationship. A missing Authorization header is a 401 for every token,
-	// which is how the gate spent its life failing closed for the right
-	// reason and the wrong behavior.
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")

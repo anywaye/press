@@ -1,9 +1,3 @@
-// Package dbtest is the gated-test helper: one scratch database per test, on
-// the server TEST_DATABASE_URL names. It SKIPS rather than fails when there
-// is no server, no reachability, or no CREATEDB — the suite must stay green
-// with no database, and a red here would read like a code failure when it is
-// really a missing server. A test that needs Postgres calls ScratchDatabase;
-// a test that does not must never import this.
 package dbtest
 
 import (
@@ -35,8 +29,6 @@ func ScratchDatabase(t *testing.T, prefix string) string {
 	if err != nil {
 		t.Skipf("opening an admin connection to TEST_DATABASE_URL: %v", err)
 	}
-	// Registered first, so it runs LAST: cleanups are LIFO and the DROP below
-	// still needs this connection.
 	t.Cleanup(func() { _ = admin.Close() })
 	if err := admin.PingContext(ctx); err != nil {
 		t.Skipf("TEST_DATABASE_URL is set but not reachable (%v). Is the server up?", err)
@@ -48,8 +40,6 @@ func ScratchDatabase(t *testing.T, prefix string) string {
 		t.Skipf("creating the scratch database %s (does TEST_DATABASE_URL's user hold CREATEDB?): %v", name, err)
 	}
 	t.Cleanup(func() {
-		// An `if exists` because a failed CREATE below would otherwise turn
-		// the cleanup into a second, more confusing failure.
 		if _, err := admin.ExecContext(context.Background(), `drop database if exists "`+name+`"`); err != nil {
 			t.Errorf("dropping the scratch database %s: %v", name, err)
 		}

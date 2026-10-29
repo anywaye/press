@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-#
-# press's migration entrypoint. It applies migrations/*.sql to the database
-# named by DATABASE_URL, in filename order, and exits.
-#
-# WHY A WRAPPER AND NOT THE WHOLE STEP. The step is `cmd/press-migrate`, which
-# links the goose library at the fleet's pinned version and records what it
-# applied in goose's own version table. A shell loop over psql would be a
-# second migration engine, and the fleet already has the receipt for that
-# class of bug: a plain `psql -f` over a goose file runs the `-- +goose Down`
-# section too (the annotations are comments to psql), applying every migration
-# and then reverting it with a zero exit status. This file therefore contains
-# no SQL handling at all — it only reaches the binary.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

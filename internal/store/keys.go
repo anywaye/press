@@ -1,9 +1,3 @@
-// Package store is press's half of the tenant-isolation guarantee: the key
-// layout. Every object press writes lives under a tenant prefix, and the
-// prefix is derived from the caller's verified identity — never from the
-// request. This file's pure functions are therefore the whole boundary, and
-// they are tested as pure functions, because a boundary tested only through
-// the S3 client is a boundary tested one bug at a time.
 package store
 
 import (
@@ -12,9 +6,6 @@ import (
 	"strings"
 )
 
-// A tenant is an organization on the one Postgres cluster (identity's
-// account). The string form is validated at the API seam; inside this package
-// it is opaque.
 type tenant = string
 
 // Kind is the content family an object belongs to. It is part of the key, so
@@ -23,15 +14,8 @@ type tenant = string
 type Kind string
 
 const (
-	// KindDocs is public documentation. It is served at the site root with
-	// no auth, which is why its prefix is public-by-convention and nothing
-	// in it may be private.
 	KindDocs Kind = "docs"
-	// KindNotes is private documentation. Its objects are served only
-	// behind identity's JWT check.
 	KindNotes Kind = "notes"
-	// KindPantry is a pantry service's published documentation, versioned
-	// with the package.
 	KindPantry Kind = "pantry"
 )
 
@@ -48,10 +32,6 @@ func (k Kind) Private() bool {
 	return k == KindNotes
 }
 
-// segment matches one path segment press will put in a key. The fleet's names
-// are lowercase alphanumeric with dashes, so this is the union of them plus
-// pantry's version-ish characters — deliberately tighter than S3 allows,
-// because a key that parses is a key that can be reasoned about.
 var segment = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 func checkSegment(s string) error {
