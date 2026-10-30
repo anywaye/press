@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/anywaye/press/internal/errorreporting"
 	"strings"
 	"time"
 )
@@ -66,6 +68,7 @@ func (h *HTTPIntrospector) Introspect(ctx context.Context, token string) (Intros
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := h.client.Do(req)
 	if err != nil {
+		errorreporting.CaptureError(fmt.Errorf("press: identity unreachable: %w", err), nil)
 		return Introspection{}, fmt.Errorf("verify: identity unreachable: %w", err)
 	}
 	defer resp.Body.Close()
@@ -74,6 +77,7 @@ func (h *HTTPIntrospector) Introspect(ctx context.Context, token string) (Intros
 	}
 	if resp.StatusCode/100 != 2 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<12))
+		errorreporting.CaptureError(fmt.Errorf("press: identity answered %d: %s", resp.StatusCode, bytes.TrimSpace(msg)), nil)
 		return Introspection{}, fmt.Errorf("verify: identity answered %d: %s", resp.StatusCode, bytes.TrimSpace(msg))
 	}
 	var out introspectionResponse
