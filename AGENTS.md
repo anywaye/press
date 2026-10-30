@@ -51,3 +51,17 @@ prefix. Every failure lands the record on `failed` with its reason.
 
 ## Secrets
 - No `.env` files with values. Use `any secret set/get/list` (dev) and `any dev` (injects). See `docs/secrets.md`.
+
+
+## Code comments policy
+
+Comments are banned except for the allowlisted set enforced by `bin/prime` via
+`platform/scripts/commentlint.py`:
+
+- License/copyright headers (top of file)
+- Doc comments on exported/public symbols
+- `TODO`/`FIXME`/`XXX` referencing a tracked issue: `TODO(#123)`
+- Compiler/linter directives (`//go:build`, `//nolint`, `# noqa`, etc.)
+
+All other comments (narration, restatements, "why" rationale, agent-added notes)
+are prohibited. `bin/prime` fails if any non-allowlisted comment is present.
