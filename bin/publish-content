@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Publish a content directory to press for a tenant.
+# Usage: publish-content.sh <content-dir> <tenant-id> <press-url> <token>
+set -euo pipefail
+CONTENT_DIR="${1:?usage: publish-content.sh <dir> <tenant> <press-url> <token>}"
+TENANT="${2:?}"
+PRESS_URL="${3:?}"
+TOKEN="${4:?}"
+
+cd "$CONTENT_DIR"
+tar czf /tmp/content.tar.gz .
+curl -sS -X POST "$PRESS_URL/v1/ingest" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "kind=docs" \
+  -F "content=@/tmp/content.tar.gz" \
+  | python3 -m json.tool
+echo ""
+echo "Published to $PRESS_URL for tenant $TENANT"

@@ -113,6 +113,10 @@ func (f *fakePutStore) Head(_ context.Context, _ string) (int64, error) {
 	return 0, errors.New("not needed here")
 }
 
+func (f *fakePutStore) List(_ context.Context, _ string) ([]string, error) {
+	return nil, errors.New("not needed here")
+}
+
 func TestDirUploaderPutsEveryFileUnderThePrefix(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
