@@ -22,6 +22,7 @@ type Client interface {
 	Put(ctx context.Context, key string, body []byte) error
 	Get(ctx context.Context, key string) ([]byte, error)
 	Head(ctx context.Context, key string) (int64, error)
+	List(ctx context.Context, prefix string) ([]string, error)
 }
 
 // R2 talks to an R2 bucket over its S3 API. Zero value is not usable; build

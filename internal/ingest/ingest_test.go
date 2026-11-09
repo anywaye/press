@@ -8,6 +8,7 @@ import (
 	"errors"
 	"mime/multipart"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 
@@ -53,6 +54,16 @@ func (f *fakeStore) Head(_ context.Context, key string) (int64, error) {
 	}
 	return 0, store.ErrNotFound
 }
+func (f *fakeStore) List(_ context.Context, prefix string) ([]string, error) {
+	var keys []string
+	for k := range f.puts {
+		if strings.HasPrefix(k, prefix) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys, nil
+}
 
 type fakeReceipts struct {
 	rows    []Receipt
@@ -88,7 +99,7 @@ func (f *fakeQueue) Enqueue(_ context.Context, r Receipt) error {
 
 func newService(t *testing.T, tenant string, s store.Client, receipts Receipts, maxBytes int64) *Service {
 	t.Helper()
-	return NewService(fakeVerifier{claims: auth.Claims{AccountID: tenant, Subject: "user-1"}}, s, receipts, &fakeQueue{}, maxBytes)
+	return NewService(fakeVerifier{claims: auth.Claims{AccountID: tenant, Subject: "user-1"}}, "", s, receipts, &fakeQueue{}, maxBytes)
 }
 
 func multipartBody(t *testing.T, kind, project, version string, content []byte) (*bytes.Buffer, string) {
@@ -186,7 +197,7 @@ func TestIngestRefusesAnOverCapTarballBeforeWritingAnything(t *testing.T) {
 
 func TestIngestRefusesAnUnverifiedCaller(t *testing.T) {
 	s := newFakeStore()
-	svc := NewService(fakeVerifier{err: errors.New("token expired")}, s, &fakeReceipts{}, &fakeQueue{}, 1<<20)
+	svc := NewService(fakeVerifier{err: errors.New("token expired")}, "", s, &fakeReceipts{}, &fakeQueue{}, 1<<20)
 	_, status, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("x"))
 	if err == nil || status != 401 {
 		t.Fatalf("status = %d, err = %v; want 401", status, err)
@@ -315,6 +326,7 @@ func TestIngestEnqueuesTheBuildForItsReceipt(t *testing.T) {
 	q := &fakeQueue{}
 	svc := NewService(
 		fakeVerifier{claims: auth.Claims{AccountID: "beta-org", Subject: "user-1"}},
+		"",
 		s, receipts, q, 1<<20)
 
 	receipt, _, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("x"))
@@ -332,7 +344,7 @@ func TestIngestEnqueuesTheBuildForItsReceipt(t *testing.T) {
 func TestIngestReportsWhenTheBuildDoesNotEnqueue(t *testing.T) {
 	s := newFakeStore()
 	q := &fakeQueue{err: errors.New("db down")}
-	svc := NewService(fakeVerifier{claims: auth.Claims{AccountID: "beta-org"}}, s, &fakeReceipts{}, q, 1<<20)
+	svc := NewService(fakeVerifier{claims: auth.Claims{AccountID: "beta-org"}}, "", s, &fakeReceipts{}, q, 1<<20)
 	_, status, err := svc.Ingest(context.Background(), "token", Request{Kind: string(store.KindDocs)}, strings.NewReader("x"))
 	if err == nil || status != 500 {
 		t.Fatalf("status = %d, err = %v; want 500 naming the enqueue", status, err)

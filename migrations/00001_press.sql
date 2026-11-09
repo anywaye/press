@@ -1,5 +1,4 @@
-
-
+-- +goose Up
 CREATE TABLE IF NOT EXISTS ingest_receipts (
     id           text PRIMARY KEY,
     tenant_id    text NOT NULL,
@@ -29,7 +28,6 @@ CREATE TABLE IF NOT EXISTS builds (
 
 CREATE INDEX IF NOT EXISTS builds_tenant_state
     ON builds (tenant_id, state);
-
-
+-- +goose Down
 DROP TABLE IF EXISTS builds;
 DROP TABLE IF EXISTS ingest_receipts;

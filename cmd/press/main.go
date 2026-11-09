@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/anywaye/press/internal/auth"
 	"github.com/anywaye/press/internal/builds"
+	"github.com/anywaye/press/internal/content"
 	"github.com/anywaye/press/internal/config"
 	"github.com/anywaye/press/internal/errorreporting"
 	"github.com/anywaye/press/internal/httpapi"
@@ -74,14 +76,37 @@ func run() error {
 		inner: verify.NewHTTPIntrospector(cfg.IdentityURL),
 	}}
 
-	r2, err := store.NewR2WithToken(cfg.Store.Endpoint, cfg.Store.Bucket, cfg.Store.AccessKeyID, cfg.Store.SecretAccessKey, cfg.Store.SessionToken)
-	if err != nil {
-		return err
+	var r2 store.Client
+	if fsDir := os.Getenv("PRESS_STORE_FS_DIR"); fsDir != "" {
+		fs, err := store.NewFSClient(fsDir)
+		if err != nil {
+			return err
+		}
+		r2 = fs
+	} else if cfToken := os.Getenv("PRESS_STORE_CF_TOKEN"); cfToken != "" {
+		accountID := os.Getenv("PRESS_STORE_CF_ACCOUNT_ID")
+		if accountID == "" {
+			accountID = "1e83e8ee4d1b6e51c2f4527ea005804d"
+		}
+		cf, err := store.NewCFStore(accountID, cfg.Store.Bucket, cfToken)
+		if err != nil {
+			return err
+		}
+		r2 = cf
+	} else {
+		r, err := store.NewR2WithToken(cfg.Store.Endpoint, cfg.Store.Bucket, cfg.Store.AccessKeyID, cfg.Store.SecretAccessKey, cfg.Store.SessionToken)
+		if err != nil {
+			return err
+		}
+		r2 = r
 	}
 
 	receipts := ingest.NewPostgresReceipts(pool)
 	buildStore := builds.NewPostgresBuilds(pool)
-	ingestSvc := ingest.NewService(verifier, r2, receipts, queue.Production(buildStore.Insert), cfg.MaxIngestBytes)
+	ingestSvc := ingest.NewService(verifier, cfg.IdentityURL, r2, receipts, queue.Production(buildStore.Insert), cfg.MaxIngestBytes)
+
+notesAccounts := strings.Split(os.Getenv("PRESS_NOTES_ACCOUNTS"), ",")
+contentSvc := content.NewService(r2, verifier, cfg.IdentityURL, notesAccounts)
 
 	var flush telemetry.Shutdown
 	flush, err = telemetry.Install(ctx, telemetry.Options{
@@ -125,14 +150,17 @@ func run() error {
 			http.Error(w, "press database unreachable", http.StatusServiceUnavailable)
 			return
 		}
+		if os.Getenv("PRESS_STORE_FS_DIR") == "" && os.Getenv("PRESS_STORE_CF_TOKEN") == "" {
 		if _, err := store.NewR2(cfg.Store.Endpoint, cfg.Store.Bucket, cfg.Store.AccessKeyID, cfg.Store.SecretAccessKey); err != nil {
 			http.Error(w, "artifact store misconfigured", http.StatusServiceUnavailable)
 			return
 		}
+	}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 	r.Mount("/v1/ingest", ingestSvc.Handler())
+r.Mount("/v1/content", contentSvc.Handler())
 
 	handler := errorreporting.RecoverMiddleware(r)
 	srv := &http.Server{Addr: cfg.Addr, Handler: handler}

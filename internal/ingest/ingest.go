@@ -8,7 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"archive/tar"
+"bytes"
+"compress/gzip"
+"io"
+"path/filepath"
 	"net/http"
 	"strings"
 
@@ -40,11 +44,12 @@ var ErrReceiptExists = errors.New("ingest: receipt id already exists")
 // Postgres, without R2, and without identity — a behavior test that needs the
 // database is a behavior test that silently skips in CI.
 type Service struct {
-	verifier auth.Verifier
-	store    store.Client
-	receipts Receipts
-	queues   Queue
-	maxBytes int64
+	verifier    auth.Verifier
+	identityURL string
+	store       store.Client
+	receipts    Receipts
+	queues      Queue
+	maxBytes    int64
 }
 
 // Queue enqueues the build a receipt exists to feed. PressPosts's
@@ -61,8 +66,8 @@ type Receipts interface {
 	Insert(ctx context.Context, r Receipt) error
 }
 
-func NewService(v auth.Verifier, s store.Client, receipts Receipts, queues Queue, maxBytes int64) *Service {
-	return &Service{verifier: v, store: s, receipts: receipts, queues: queues, maxBytes: maxBytes}
+func NewService(v auth.Verifier, identityURL string, s store.Client, receipts Receipts, queues Queue, maxBytes int64) *Service {
+	return &Service{verifier: v, identityURL: strings.TrimSuffix(identityURL, "/"), store: s, receipts: receipts, queues: queues, maxBytes: maxBytes}
 }
 
 // Request is the parsed form press accepts. There is deliberately no Tenant
@@ -111,11 +116,24 @@ func ParseRequest(r *http.Request) (Request, io.Reader, error) {
 // Ingest runs the whole path: verify, cap, digest, write, record. It returns
 // the receipt and the status the caller should see.
 func (s *Service) Ingest(ctx context.Context, token string, req Request, body io.Reader) (Receipt, int, error) {
-	claims, err := s.verifier.Verify(ctx, token)
+	// verify token via identity's /v1/me (works with session tokens)
+	var tenant string
+	var err error
+	if s.identityURL != "" {
+		tenant, err = verifyTokenViaMe(ctx, s.identityURL, token)
+	} else if s.verifier != nil {
+		claims, verr := s.verifier.Verify(ctx, token)
+		if verr != nil {
+			err = verr
+		} else {
+			tenant = claims.AccountID
+		}
+	} else {
+		err = fmt.Errorf("no verifier configured")
+	}
 	if err != nil {
 		return Receipt{}, http.StatusUnauthorized, fmt.Errorf("ingest: %w", err)
 	}
-	tenant := claims.AccountID
 
 	if store.Kind(req.Kind) == store.KindPantry {
 		if _, err := store.PantryArtifactPrefix(tenant, req.Project, req.Version); err != nil {
@@ -150,6 +168,10 @@ func (s *Service) Ingest(ctx context.Context, token string, req Request, body io
 		return Receipt{}, http.StatusBadGateway, fmt.Errorf("ingest: cannot write the tarball: %w", err)
 	}
 
+	if err := extractAndStore(ctx, s.store, tenant, data); err != nil {
+		return Receipt{}, http.StatusBadGateway, fmt.Errorf("ingest: cannot extract content: %w", err)
+	}
+
 	sum := sha256.Sum256(data)
 	receipt := Receipt{
 		ID:        id,
@@ -161,7 +183,7 @@ func (s *Service) Ingest(ctx context.Context, token string, req Request, body io
 		Size:      int64(len(data)),
 		State:     "received",
 		ObjectKey: key,
-		Caller:    claims.Subject,
+		Caller:    tenant,
 	}
 	if err := s.receipts.Insert(ctx, receipt); err != nil {
 		return Receipt{}, http.StatusInternalServerError, fmt.Errorf("ingest: object written to %s but the receipt did not record: %w", key, err)
@@ -211,4 +233,72 @@ func newReceiptID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b[:]), nil
+}
+
+
+func extractAndStore(ctx context.Context, st store.Client, tenant string, data []byte) error {
+	gz, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		// not a gzipped tarball; store as-is, no extraction
+		return nil
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read the tarball: %w", err)
+		}
+		for _, part := range strings.Split(filepath.ToSlash(hdr.Name), "/") {
+			if part == ".." {
+				return fmt.Errorf("path escape: %s", hdr.Name)
+			}
+		}
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		name := strings.TrimPrefix(filepath.ToSlash(hdr.Name), "/")
+		if name == "" {
+			continue
+		}
+		body, err := io.ReadAll(tr)
+		if err != nil {
+			return fmt.Errorf("read member %s: %w", hdr.Name, err)
+		}
+		key := fmt.Sprintf("tenants/%s/content/%s", tenant, name)
+		if err := st.Put(ctx, key, body); err != nil {
+			return fmt.Errorf("write %s: %w", key, err)
+		}
+	}
+}
+
+
+func verifyTokenViaMe(ctx context.Context, identityURL, token string) (string, error) {
+	if identityURL == "" {
+		return "", fmt.Errorf("identity URL not configured")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, identityURL+"/v1/me", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("identity unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("invalid token")
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || out.ID == "" {
+		return "", fmt.Errorf("invalid identity response")
+	}
+	return out.ID, nil
 }
