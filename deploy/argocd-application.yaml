@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: oci://ghcr.io/anywaye/charts/press
     chart: press
-    targetRevision: 0.1.6
+    targetRevision: 0.1.8
   destination:
     server: https://kubernetes.default.svc
     namespace: press
