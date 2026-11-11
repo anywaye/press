@@ -8,6 +8,7 @@ RUN CGO_ENABLED=0 go build -o /out/press ./cmd/press
 FROM scratch
 COPY --from=build /out/press /press
 COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/press"]
