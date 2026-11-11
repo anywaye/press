@@ -10,7 +10,19 @@ spec:
   source:
     repoURL: oci://ghcr.io/anywaye/charts/press
     chart: press
-    targetRevision: 0.1.10
+    targetRevision: 0.1.20
+    helm:
+      values: |
+        image:
+          digest: "sha256:a89332fec05a129315dc146bac7b15dfacbb20a2dff48a044b63a9a75768b00c"
+        env:
+          PRESS_ADDR: ":8080"
+          PRESS_IDENTITY_URL: "http://identity.identity.svc.cluster.local:8080"
+          PRESS_NOTES_ACCOUNTS: "*"
+        ingress:
+          hosts:
+            - auth.anywaye.com
+          tls: true
   destination:
     server: https://kubernetes.default.svc
     namespace: press
