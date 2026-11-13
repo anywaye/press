@@ -59,6 +59,7 @@ func (s *Service) bearerToken(r *http.Request) string {
 }
 
 func (s *Service) isAuthed(ctx context.Context, token string) (string, bool) {
+	slog.Info("content: isAuthed", "identity_url", s.identityURL, "token_len", len(token))
 	if token == "" || s.identityURL == "" {
 		return "", false
 	}
