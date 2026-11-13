@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -68,10 +69,12 @@ func (s *Service) isAuthed(ctx context.Context, token string) (string, bool) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		slog.Error("content: identity /v1/me request failed", "url", s.identityURL+"/v1/me", "err", err)
 		return "", false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		slog.Error("content: identity /v1/me rejected the token", "status", resp.StatusCode)
 		return "", false
 	}
 	// parse account_id if present; otherwise use token as identity
@@ -86,6 +89,9 @@ func (s *Service) isAuthed(ctx context.Context, token string) (string, bool) {
 }
 
 func (s *Service) canReadNotes(accountID string) bool {
+	if s.notesAccounts["*"] {
+		return true
+	}
 	return s.notesAccounts[accountID]
 }
 
@@ -134,9 +140,13 @@ func (s *Service) handleManifest(w http.ResponseWriter, r *http.Request) {
 		// authed users see drafts + notes (if allowed)
 		sections = append([]string{}, allSections...)
 	}
+	sectionFilter := r.URL.Query().Get("section")
 
 	var items []ManifestItem
 	for _, sec := range sections {
+		if sectionFilter != "" && sec != sectionFilter {
+			continue
+		}
 		if sec == "notes" || strings.HasPrefix(sec, "drafts/") {
 			if !authed {
 				continue

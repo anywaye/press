@@ -240,3 +240,68 @@ func TestContentThemeDefault(t *testing.T) {
 		t.Errorf("body = %q, want {}", rr.Body.String())
 	}
 }
+func TestNotesWildcardAllowsAnyAccount(t *testing.T) {
+	wildcard := NewService(newFakeStoreCS(), auth.ChainVerifier{}, "", []string{"*"})
+	if !wildcard.canReadNotes("any-account") {
+		t.Fatal(`notes allowlist "*" did not allow an arbitrary account`)
+	}
+
+	exact := NewService(newFakeStoreCS(), auth.ChainVerifier{}, "", []string{"acct-1"})
+	if !exact.canReadNotes("acct-1") {
+		t.Fatal("allowlisted account was refused")
+	}
+	if exact.canReadNotes("acct-2") {
+		t.Fatal("account outside the allowlist was allowed")
+	}
+}
+
+func TestContentManifestFiltersSection(t *testing.T) {
+	store := newFakeStoreCS()
+	store.data["tenants/boax/content/docs/quickstart.md"] = []byte("---\ntitle: Quickstart\n---\n# Quickstart")
+	store.data["tenants/boax/content/notes/secret.md"] = []byte("---\ntitle: Secret\n---\n# Secret")
+
+	identitySrv := newTestIdentity(t, map[string]bool{"valid-token": true})
+	defer identitySrv.Close()
+
+	svc := NewService(store, auth.ChainVerifier{}, identitySrv.URL, []string{"*"})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/manifest?section=notes", nil)
+	req.Header.Set("X-Tenant-ID", "boax")
+	req.Header.Set("Authorization", "Bearer valid-token")
+	rr := httptest.NewRecorder()
+	svc.handleManifest(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var resp struct {
+		Items []ManifestItem `json:"items"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].Section != "notes" {
+		t.Fatalf("items = %+v, want exactly the one notes item", resp.Items)
+	}
+}
+
+func TestContentGetPrivateWildcard(t *testing.T) {
+	store := newFakeStoreCS()
+	store.data["tenants/boax/content/notes/secret.md"] = []byte("# Secret")
+
+	identitySrv := newTestIdentity(t, map[string]bool{"valid-token": true})
+	defer identitySrv.Close()
+
+	svc := NewService(store, auth.ChainVerifier{}, identitySrv.URL, []string{"*"})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/notes/secret.md", nil)
+	req.Header.Set("X-Tenant-ID", "boax")
+	req.Header.Set("Authorization", "Bearer valid-token")
+	req.SetPathValue("path", "notes/secret.md")
+	rr := httptest.NewRecorder()
+	svc.handleGet(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (wildcard allowlist)", rr.Code)
+	}
+}
