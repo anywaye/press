@@ -10,11 +10,11 @@ spec:
   source:
     repoURL: oci://ghcr.io/anywaye/charts/press
     chart: press
-    targetRevision: 0.1.23
+    targetRevision: 0.1.25
     helm:
       values: |
         image:
-          digest: "sha256:ac2a8468c3c37cb0cee5afc6daec0dc5ea9aa636556492f0b560b5b2fa58dda6"
+          digest: "sha256:0052eecf8105712c2d8dd14f12cdd4a321c34660aae2b14053e48243c56fe5e9"
         env:
           PRESS_ADDR: ":8080"
           PRESS_IDENTITY_URL: "http://identity.identity.svc.cluster.local:8080"
